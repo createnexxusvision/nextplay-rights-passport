@@ -1,0 +1,17 @@
+{
+  "name": "@nextplay/api",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "eval": "tsx src/eval.ts"
+  },
+  "dependencies": {
+    "@nextplay/core": "0.1.0",
+    "fastify": "^5.2.0",
+    "@fastify/rate-limit": "^10.2.0",
+    "zod": "^3.24.0"
+  }
+}

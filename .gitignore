@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+# Secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.dev.vars
+# Midnight local state (Saturday+)
+**/private-state/
+**/midnight-level-db/
+config/contract.*.json

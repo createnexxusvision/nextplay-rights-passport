@@ -1,0 +1,5 @@
+{
+  "policy": {"version":1,"territory":["US"],"media":["social","advertising","web"],"durationDays":90,"commercialUse":true,"aiTraining":false,"aiGeneration":false,"likenessUse":false,"sublicensing":false,"attributionRequired":true,"minimumFeeMinor":100000,"currency":"USD"},
+  "requestText": "Generate an AI video ad using the athlete's face and voice for a national US campaign, 60 days, $5,000.",
+  "acceptable": ["DENIED"]
+}

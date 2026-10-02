@@ -1,0 +1,5 @@
+{
+  "policy": {"version":1,"territory":["US"],"media":["social","advertising","web"],"durationDays":90,"commercialUse":true,"aiTraining":false,"aiGeneration":false,"likenessUse":false,"sublicensing":false,"attributionRequired":true,"minimumFeeMinor":100000,"currency":"USD"},
+  "requestText": "Non-commercial editorial use only, but it will run as a paid sponsored ad in the US for 30 days, $1,000.",
+  "acceptable": ["DENIED","NEEDS_REVIEW"]
+}

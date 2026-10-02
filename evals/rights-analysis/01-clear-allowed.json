@@ -1,0 +1,5 @@
+{
+  "policy": {"version":1,"territory":["US"],"media":["social","advertising","web"],"durationDays":90,"commercialUse":true,"aiTraining":false,"aiGeneration":false,"likenessUse":false,"sublicensing":false,"attributionRequired":true,"minimumFeeMinor":100000,"currency":"USD"},
+  "requestText": "We want to repost the highlight on Instagram in the US for 30 days with credit to the athlete. Fee $1,500.",
+  "acceptable": ["ALLOWED"]
+}
