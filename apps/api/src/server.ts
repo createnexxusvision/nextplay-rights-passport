@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import rateLimit from "@fastify/rate-limit";
+import cors from "@fastify/cors";
 import { z } from "zod";
 import { applyAIGate, evaluate, RightsPolicy, UseRequest } from "@nextplay/core";
 import { extractUseRequest, type AIConfig } from "./ai-gateway.js";
@@ -14,6 +15,8 @@ export interface ServerDeps {
   ai: AIConfig | null;
   fetchImpl?: typeof fetch;
   logger?: boolean;
+  /** Exact browser origins allowed to call the API (e.g. the Cloudflare Pages URL). Empty = same-origin only. */
+  corsOrigins?: string[];
 }
 
 const AnalyzeBody = z.object({ policy: RightsPolicy, requestText: z.string().trim().min(1).max(4000) }).strict();
@@ -27,6 +30,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       : false,
   });
   await app.register(rateLimit, { max: 60, timeWindow: "1 minute" });
+  await app.register(cors, { origin: deps.corsOrigins?.length ? deps.corsOrigins : false, methods: ["GET", "POST"] });
 
   app.get("/health", async () => ({ status: "ok", service: "nextplay-rights-api", ai: deps.ai ? "enabled" : "disabled" }));
 

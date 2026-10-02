@@ -33,7 +33,7 @@ A brand or AI agent asks *"can I use this asset for this purpose?"*. An NVIDIA N
 ```text
 packages/core        canonicalization, commitments, schemas, policy engine, splits, ledger boundary
 apps/api             Fastify API + Nebius/Nemotron gateway + eval runner
-apps/web             UI (next milestone, see apps/web/README.md)
+apps/web             Vite + React app: register → splits → policy seal → request check → passport
 contracts/           Midnight RightsRegistry spec (wallet/token work gated, see contracts/README.md)
 evals/               fixed rights-analysis corpus (allowed / denied / ambiguous / injection)
 docs/                decisions, hackathon checklist, security
@@ -48,6 +48,8 @@ npm test           # 27 unit + API tests, no network needed
 npm run typecheck
 cp .env.example .env   # add Nebius credentials to enable the AI
 npm run dev:api        # http://localhost:8080/health
+npm run dev:web        # http://localhost:5173 (second terminal)
+npm run models         # list Nemotron model ids your Nebius key can use
 npm run eval           # live Nemotron eval corpus (needs NEBIUS_*)
 ```
 
@@ -61,7 +63,7 @@ npm run eval           # live Nemotron eval corpus (needs NEBIUS_*)
 
 ## How Nebius and NVIDIA are used
 
-The `analyze` endpoint calls an NVIDIA Nemotron model served by **Nebius Token Factory** through its OpenAI-compatible chat-completions API (`NEBIUS_BASE_URL`, `NEBIUS_MODEL`). The model converts free-text use requests into a strict `UseRequest` schema and writes a reviewer-facing explanation. Every response records the model id and latency.
+The `analyze` endpoint calls an NVIDIA Nemotron model served by **Nebius Token Factory** through its OpenAI-compatible chat-completions API (`NEBIUS_BASE_URL`, `NEBIUS_MODEL`). The model converts free-text use requests into a strict `UseRequest` schema and writes a reviewer-facing explanation. Every response records the model id and latency. [`docs/NEBIUS.md`](docs/NEBIUS.md) explains why this uses Token Factory rather than AI Cloud.
 
 ## Status
 
