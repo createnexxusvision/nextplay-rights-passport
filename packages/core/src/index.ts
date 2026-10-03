@@ -6,3 +6,4 @@ export * from "./splits.js";
 export * from "./ledger.js";
 export * from "./injection.js";
 export * from "./vault.js";
+export * from "./stream-hash.js";

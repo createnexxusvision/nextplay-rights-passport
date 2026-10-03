@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   commit,
-  contentHash,
+  contentHashStream,
   DemoLedger,
   RightsPolicy,
   UseRequest,
@@ -85,13 +85,27 @@ export function App() {
   const [asset, setAsset] = useState<PassportAsset | null>(null);
   const [title, setTitle] = useState("");
   const [assetType, setAssetType] = useState<string>(ASSET_TYPES[0]);
-  const [hashing, setHashing] = useState(false);
+  const [hashing, setHashing] = useState<number | null>(null);
+  const [hashError, setHashError] = useState<string | null>(null);
 
   async function onFile(file: File | undefined) {
     if (!file) return;
-    setHashing(true);
-    const hash = await contentHash(new Uint8Array(await file.arrayBuffer()));
-    setHashing(false);
+    setHashing(0);
+    setHashError(null);
+    let hash: string;
+    try {
+      // Streamed (S7): a multi-GB video is hashed chunk by chunk, never loaded whole.
+      let last = 0;
+      hash = await contentHashStream(file.stream(), (n) => {
+        const pct = file.size ? Math.floor((n / file.size) * 100) : 100;
+        if (pct !== last) setHashing((last = pct));
+      });
+    } catch {
+      setHashError("Couldn't read that file. Try again or pick another copy.");
+      return;
+    } finally {
+      setHashing(null);
+    }
     setAsset({
       title: title.trim() || file.name.replace(/\.[^.]+$/, ""),
       assetType,
@@ -286,9 +300,11 @@ export function App() {
             </div>
             <label className="drop">
               <input type="file" onChange={(e) => void onFile(e.target.files?.[0])} />
-              <strong>{hashing ? "Fingerprinting…" : asset ? `Fingerprinted ${asset.fileName}` : "Choose a file to fingerprint"}</strong>
+              <strong>{hashing !== null ? `Fingerprinting… ${hashing}%` : asset ? `Fingerprinted ${asset.fileName}` : "Choose a file to fingerprint"}</strong>
+              {hashing !== null && <progress max={100} value={hashing} aria-label="Fingerprinting progress" />}
               <span>{asset ? <code>{asset.contentHash}</code> : "Video, photo, audio or design file. Any size."}</span>
             </label>
+            {hashError && <p className="error" role="alert">{hashError}</p>}
           </li>
 
           <li className="step">
