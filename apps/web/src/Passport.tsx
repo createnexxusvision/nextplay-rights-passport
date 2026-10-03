@@ -22,6 +22,8 @@ interface Props {
   splitsOk: boolean;
   sealed: { version: number; commitment: Commitment; history: number } | null;
   result: CheckResult | null;
+  /** True only after the receipt signature verified against the published keys. */
+  receiptVerified: boolean;
   anchor: AnchorResult | null;
   onAnchor: () => void;
 }
@@ -29,7 +31,7 @@ interface Props {
 const short = (h: string) => `${h.slice(0, 10)}…${h.slice(-6)}`;
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
-export function Passport({ asset, disclose, onDisclose, contributorCount, splitsOk, sealed, result, anchor, onAnchor }: Props) {
+export function Passport({ asset, disclose, onDisclose, contributorCount, splitsOk, sealed, result, receiptVerified, anchor, onAnchor }: Props) {
   // Re-key the stamp on every new result so it lands again.
   const [stampKey, setStampKey] = useState(0);
   useEffect(() => {
@@ -67,6 +69,11 @@ export function Passport({ asset, disclose, onDisclose, contributorCount, splits
                 {DECISION_TEXT[result.decision].stamp}
               </div>
               <p className="verdict-line">{DECISION_TEXT[result.decision].line}</p>
+              {receiptVerified && result.receipt && (
+                <p className="signed" title={`Receipt ${result.receipt.receipt.receiptId}, key ${result.receipt.receipt.kid}`}>
+                  Signed by NextPlay rights engine
+                </p>
+              )}
               {result.confirmation?.required && (
                 <p className="warn">Provisional. Confirm the terms the AI read before relying on this.</p>
               )}
@@ -116,6 +123,12 @@ export function Passport({ asset, disclose, onDisclose, contributorCount, splits
             <dd><code>{sealed?.commitment.commitment ?? "—"}</code></dd>
             <dt>Seal scheme</dt><dd>SHA-256 over domain tag, 32-byte private salt and canonical JSON</dd>
             <dt>Decision engine</dt><dd>{result?.evaluation?.engineVersion ?? "—"}</dd>
+            <dt>Decision receipt</dt>
+            <dd>
+              {!result?.receipt ? "—" : receiptVerified
+                ? <>Ed25519, key <code>{result.receipt.receipt.kid}</code>, verified</>
+                : "Not verified"}
+            </dd>
             <dt>AI</dt>
             <dd>
               {!result ? "—" : result.ai.status === "ok"

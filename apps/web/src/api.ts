@@ -1,4 +1,4 @@
-import type { Evaluation, RightsPolicy, UseRequest } from "@nextplay/core";
+import type { CommitmentOpening, Evaluation, PublicKeyEntry, RightsPolicy, SignedReceipt, UseRequest } from "@nextplay/core";
 
 const BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
@@ -24,6 +24,15 @@ export interface CheckResult {
   confirmation?: { required: true; terms: UseRequest } | { required: false };
   ai: AIInfo;
   advisory?: string;
+  /** C2: signed by the API. Untrusted until verified against /api/v1/keys. */
+  receipt?: SignedReceipt;
+  requestOpening?: CommitmentOpening;
+}
+
+/** Opening of the policy seal, so the API can bind its receipt to the sealed commitment. */
+export interface PolicySeal {
+  commitment: string;
+  salt: string;
 }
 
 /** The AI path is out of budget or offline: the caller should switch to the form. */
@@ -46,13 +55,29 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return (await res.json()) as T;
 }
 
-export function analyze(policy: RightsPolicy, requestText: string): Promise<CheckResult> {
-  return post<CheckResult>("/api/v1/rights/analyze", { policy, requestText });
+export function analyze(policy: RightsPolicy, requestText: string, policySeal: PolicySeal): Promise<CheckResult> {
+  return post<CheckResult>("/api/v1/rights/analyze", { policy, requestText, policySeal });
 }
 
-export async function evaluateStructured(policy: RightsPolicy, request: UseRequest): Promise<CheckResult> {
-  const r = await post<{ evaluation: Evaluation; ai: AIInfo }>("/api/v1/rights/evaluate", { policy, request });
-  return { decision: r.evaluation.decision, evaluation: r.evaluation, basis: "structured_terms", ai: r.ai, extractedRequest: request };
+export async function evaluateStructured(policy: RightsPolicy, request: UseRequest, policySeal: PolicySeal): Promise<CheckResult> {
+  const r = await post<Pick<CheckResult, "evaluation" | "ai" | "receipt" | "requestOpening"> & { evaluation: Evaluation }>(
+    "/api/v1/rights/evaluate",
+    { policy, request, policySeal },
+  );
+  return { ...r, decision: r.evaluation.decision, basis: "structured_terms", extractedRequest: request };
+}
+
+let keysCache: Promise<PublicKeyEntry[]> | null = null;
+/** Receipt verification keys, fetched once per page load. */
+export function receiptKeys(): Promise<PublicKeyEntry[]> {
+  keysCache ??= fetch(`${BASE}/api/v1/keys`)
+    .then((r) => (r.ok ? (r.json() as Promise<{ keys: PublicKeyEntry[] }>) : { keys: [] }))
+    .then((b) => b.keys)
+    .catch(() => {
+      keysCache = null;
+      return [];
+    });
+  return keysCache;
 }
 
 export async function health(): Promise<{ ai: "enabled" | "disabled" } | null> {

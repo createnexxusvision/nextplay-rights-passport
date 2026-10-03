@@ -2,7 +2,20 @@ import Fastify, { type FastifyInstance } from "fastify";
 import rateLimit from "@fastify/rate-limit";
 import cors from "@fastify/cors";
 import { z } from "zod";
-import { applyAIGate, evaluate, RightsPolicy, scanForInjection, UseRequest } from "@nextplay/core";
+import {
+  applyAIGate,
+  commit,
+  evaluate,
+  RightsPolicy,
+  scanForInjection,
+  UseRequest,
+  verifyOpening,
+  canonicalize,
+  type Evaluation,
+  type PublicKeyEntry,
+  type ReceiptBasis,
+  type ReceiptSigner,
+} from "@nextplay/core";
 import { extractUseRequest, type AIConfig } from "./ai-gateway.js";
 import { clientKey, peerAllowed, type TrustProxyMode } from "./proxy.js";
 
@@ -22,11 +35,22 @@ export interface ServerDeps {
   trustProxy?: TrustProxyMode;
   /** Global cap on model calls per UTC day (S2). 0 or undefined = unlimited (dev only). */
   aiDailyCallLimit?: number;
+  /** Signs decision receipts (C2). Without it, no receipts are issued. */
+  signer?: ReceiptSigner;
+  /** Rotated-out public keys still published so old receipts verify. */
+  retiredKeys?: PublicKeyEntry[];
   now?: () => Date;
 }
 
-const AnalyzeBody = z.object({ policy: RightsPolicy, requestText: z.string().trim().min(1).max(4000) }).strict();
-const EvaluateBody = z.object({ policy: RightsPolicy, request: UseRequest }).strict();
+const Hex32 = z.string().regex(/^0x[0-9a-fA-F]{64}$/);
+/**
+ * Opening of the caller's policy seal. Lets the API bind a receipt to the
+ * sealed commitment. The server already sees the policy plaintext; the salt is
+ * used once to check the seal and is never logged or stored.
+ */
+const PolicySeal = z.object({ commitment: Hex32, salt: Hex32 }).strict();
+const AnalyzeBody = z.object({ policy: RightsPolicy, requestText: z.string().trim().min(1).max(4000), policySeal: PolicySeal.optional() }).strict();
+const EvaluateBody = z.object({ policy: RightsPolicy, request: UseRequest, policySeal: PolicySeal.optional() }).strict();
 
 /** Fallback the client shows whenever the AI path can't answer. */
 const FORM_FALLBACK = "Automatic extraction unavailable. Use the structured request form.";
@@ -89,16 +113,61 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
   await app.register(cors, { origin: deps.corsOrigins?.length ? deps.corsOrigins : false, methods: ["GET", "POST"] });
 
+  /** Whether the seal opening matches the policy that was sent. */
+  async function sealMatches(policy: RightsPolicy, seal: z.infer<typeof PolicySeal>): Promise<boolean> {
+    return verifyOpening(
+      { domain: "rights-policy", version: 1, commitment: seal.commitment },
+      { salt: seal.salt, canonical: canonicalize(policy) },
+    );
+  }
+
+  /** C2: sign what the engine decided, bound to the sealed policy and a salted request commitment. */
+  async function issueReceipt(
+    seal: z.infer<typeof PolicySeal> | undefined,
+    evaluation: Evaluation,
+    request: UseRequest,
+    basis: ReceiptBasis,
+    model: string | null,
+  ) {
+    if (!deps.signer || !seal) return {};
+    const { commitment, opening } = await commit("use-request", request);
+    const signed = deps.signer.sign(
+      {
+        policyCommitment: seal.commitment.toLowerCase(),
+        policyVersion: evaluation.policyVersion,
+        requestCommitment: commitment.commitment,
+        decision: evaluation.decision,
+        denials: evaluation.denials,
+        reviews: evaluation.reviews,
+        engineVersion: evaluation.engineVersion,
+        model,
+        basis,
+      },
+      deps.now?.(),
+    );
+    // The opening goes only to this caller; it is what lets them later prove which request was decided.
+    return { receipt: signed, requestOpening: opening };
+  }
+
   app.get("/health", async () => ({ status: "ok", service: "nextplay-rights-api", ai: deps.ai ? "enabled" : "disabled" }));
+
+  /** C2: public keys for verifying decision receipts. */
+  app.get("/api/v1/keys", async () => ({
+    keys: [...(deps.signer ? [deps.signer.publicKey] : []), ...(deps.retiredKeys ?? [])],
+  }));
 
   /** Deterministic only — works with AI fully disabled. */
   app.post("/api/v1/rights/evaluate", async (req, reply) => {
     const parsed = EvaluateBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_request", issues: parsed.error.issues });
+    const { policy, request, policySeal } = parsed.data;
+    if (policySeal && !(await sealMatches(policy, policySeal))) return reply.code(400).send({ error: "policy_seal_mismatch" });
+    const evaluation = evaluate(policy, request);
     return {
-      evaluation: evaluate(parsed.data.policy, parsed.data.request),
+      evaluation,
       basis: "structured_terms",
       ai: { status: "not_used" },
+      ...(await issueReceipt(policySeal, evaluation, request, "structured_terms", null)),
     };
   });
 
@@ -106,7 +175,8 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   app.post("/api/v1/rights/analyze", { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (req, reply) => {
     const parsed = AnalyzeBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "invalid_request", issues: parsed.error.issues });
-    const { policy, requestText } = parsed.data;
+    const { policy, requestText, policySeal } = parsed.data;
+    if (policySeal && !(await sealMatches(policy, policySeal))) return reply.code(400).send({ error: "policy_seal_mismatch" });
 
     // S1: deterministic tripwire before the model sees anything. A hit never reaches the AI.
     const scan = scanForInjection(requestText);
@@ -171,6 +241,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
         explanation: ai.extraction.explanation,
       },
       humanReviewRequired: gated.decision !== "ALLOWED",
+      ...(await issueReceipt(policySeal, gated, ai.extraction.request, "ai_extraction", ai.model)),
       advisory: "AI output is advisory. The decision comes from the deterministic policy engine, not the model, and covers only the extracted terms shown.",
     };
   });

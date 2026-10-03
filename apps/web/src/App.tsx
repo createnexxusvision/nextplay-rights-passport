@@ -6,10 +6,11 @@ import {
   RightsPolicy,
   UseRequest,
   validateSplits,
+  verifyReceipt,
   type AnchorResult,
   type SplitEntry,
 } from "@nextplay/core";
-import { analyze, evaluateStructured, health, UseFormError, type CheckResult } from "./api";
+import { analyze, evaluateStructured, health, receiptKeys, UseFormError, type CheckResult } from "./api";
 import { Passport, type PassportAsset } from "./Passport";
 import { PrivateCopyPanel } from "./PrivateCopyPanel";
 import type { Sealed } from "./privateCopy";
@@ -62,6 +63,7 @@ interface PolicyDraft {
 }
 
 const uid = () => crypto.randomUUID().slice(0, 8);
+const sealOf = (s: Sealed) => ({ commitment: s.commitment.commitment, salt: s.opening.salt });
 
 function describeTerms(r: UseRequest): string[] {
   const yesNo = (b: boolean) => (b ? "yes" : "no");
@@ -204,7 +206,7 @@ export function App() {
     setCheckError(null);
     try {
       if (mode === "text") {
-        setResult(await analyze(current.policy, requestText));
+        setResult(await analyze(current.policy, requestText, sealOf(current)));
       } else {
         const req = UseRequest.safeParse({
           useType: form.useType,
@@ -220,7 +222,7 @@ export function App() {
           currency: form.fee ? current.policy.currency ?? "USD" : undefined,
         });
         if (!req.success) throw new Error("Check the request: countries must be 2-letter codes and days a whole number.");
-        setResult(await evaluateStructured(current.policy, req.data));
+        setResult(await evaluateStructured(current.policy, req.data, sealOf(current)));
       }
     } catch (e) {
       if (e instanceof UseFormError) setMode("form");
@@ -230,6 +232,28 @@ export function App() {
     }
   }
 
+  // C2/S9: the "signed" badge appears only after the receipt verifies locally
+  // AND says exactly what is on screen: this seal, this decision.
+  const [receiptOk, setReceiptOk] = useState(false);
+  useEffect(() => {
+    setReceiptOk(false);
+    const signed = result?.receipt;
+    if (!signed || !current) return;
+    let live = true;
+    void receiptKeys().then((keys) => {
+      const r = signed.receipt;
+      const ok =
+        verifyReceipt(signed, keys).ok &&
+        r.policyCommitment === current.commitment.commitment.toLowerCase() &&
+        r.policyVersion === current.policy.version &&
+        r.decision === result.decision;
+      if (live) setReceiptOk(ok);
+    });
+    return () => {
+      live = false;
+    };
+  }, [result, current]);
+
   // An AI-read ALLOWED is provisional: it only covers the terms the AI extracted.
   // The requester confirms those exact terms and the engine re-checks them directly.
   const pendingTerms = result?.confirmation?.required ? result.confirmation.terms : null;
@@ -238,7 +262,7 @@ export function App() {
     setChecking(true);
     setCheckError(null);
     try {
-      setResult(await evaluateStructured(current.policy, pendingTerms));
+      setResult(await evaluateStructured(current.policy, pendingTerms, sealOf(current)));
     } catch (e) {
       setCheckError(e instanceof Error ? e.message : "The check didn't finish.");
     } finally {
@@ -460,6 +484,7 @@ export function App() {
           splitsOk={splitsOk}
           sealed={current ? { version: current.policy.version, commitment: current.commitment, history: sealed.length } : null}
           result={result}
+          receiptVerified={receiptOk}
           anchor={anchor}
           onAnchor={() => void anchorPolicy()}
         />

@@ -8,6 +8,7 @@
     ".": "./src/index.ts"
   },
   "dependencies": {
+    "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.4.0",
     "zod": "^3.24.0"
   }
