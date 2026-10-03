@@ -24,11 +24,29 @@ Setup:
 3. Run `npm run models` and copy an exact Nemotron id into `NEBIUS_MODEL`.
 4. Run `npm run eval`.
 
-## Model choice (checked 2026-10-03)
+## Model choice and token use (checked 2026-10-03)
 
-`npm run models` listed four Nemotron models: `NVIDIA-Nemotron-3-Nano-30B-A3B`, `Nemotron-3_5-Lightning`, `nemotron-3-super-120b-a12b` and `Nemotron-3-Ultra-550b-a55b`. We use **`nvidia/nemotron-3-super-120b-a12b`**. It passes the eval corpus 9/9 on three runs in a row, at about 6–8 s per request.
+`npm run models` listed four Nemotron models: `NVIDIA-Nemotron-3-Nano-30B-A3B`, `Nemotron-3_5-Lightning`, `nemotron-3-super-120b-a12b` and `Nemotron-3-Ultra-550b-a55b`. We use **`nvidia/nemotron-3-super-120b-a12b`**.
+
+**The model only makes judgement calls.** Everything code can read the same way every time, code reads:
+
+| Who | What |
+|---|---|
+| Code (`extractRequestFacts`) | fee and currency, duration (incl. "2 weeks", "60-day", "perpetual"), channels (Instagram → social, website → web…), countries, credit offered. A fee or duration not in the text is never used. Two different fees or durations → human review. |
+| Code (`describeUseRequest`) | the plain-language explanation shown to reviewers |
+| Nemotron | use type, commercial, likeness, AI generation/training, sublicensing, confidence; channels/countries only as a fallback when code finds none |
+
+The policy is **not** sent to the model: extraction doesn't need the owner's private terms.
+
+**Tokens, 8 eval calls** (the injection case never reaches the model):
+
+| | Before | Now |
+|---|---|---|
+| Output | 8,024 (6,502 of it hidden reasoning) | **559** |
+| Prompt | 6,314 | **1,930** |
+| Eval | 9/9 | **9/9** (3 runs in a row) |
 
 Wiring notes:
-- **Reasoning tokens.** Nemotron 3 reasons before it answers, and those tokens count against `max_tokens`. With 1200, the JSON answer got cut off. The gateway now uses 4096 and reports `finish_reason: "length"` as `truncated`. Reasoning text is never read or returned.
-- **Structured output.** The request sends `response_format: json_schema` with the extraction schema. This stopped invented enum values (we saw `"aiGeneration"` instead of `"ai_generation"` about 1 time in 10). The strict zod parse is still the final check.
-- **Bursts.** 12 parallel calls caused some 20 s timeouts. Normal use is one call per check, and the API rate limit (20/min on `/analyze`) plus `AI_DAILY_CALL_LIMIT` keep it there.
+- Reasoning is off by default via `chat_template_kwargs: { enable_thinking: false }` (`/no_think` has no effect on Token Factory; `reasoning_effort: "low"` only halves it). Set `AI_REASONING=on` to compare. `finish_reason: "length"` is reported as `truncated`.
+- `response_format: json_schema` constrains output to valid enum values (without it we saw `"aiGeneration"` for `"ai_generation"` about 1 time in 10). The strict zod parse stays the final check.
+- `npm run eval` prints token totals per run.

@@ -9,3 +9,5 @@ export * from "./vault.js";
 export * from "./stream-hash.js";
 export * from "./receipts.js";
 export * from "./merkle.js";
+export * from "./explain.js";
+export * from "./request-facts.js";

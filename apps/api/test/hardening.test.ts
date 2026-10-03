@@ -9,11 +9,12 @@ const policy = {
   sublicensing: false, attributionRequired: true,
 };
 const editorialRead = {
-  request: { useType: "editorial", media: ["social"], territory: ["US"], durationDays: 30,
+  request: { useType: "editorial", media: ["social"], territory: ["US"],
     commercial: false, aiTraining: false, aiGeneration: false, likeness: false, sublicensing: false },
-  missingInformation: [], ambiguities: [], explanation: "Editorial social post.", confidence: 0.95,
+  confidence: 0.95,
 };
-const cfg = { baseUrl: "https://example.invalid/v1", model: "nemotron-test", apiKey: "k", timeoutMs: 1000 };
+const editorialTerms = { ...editorialRead.request, durationDays: 30 };
+const cfg = { baseUrl: "https://example.invalid/v1", model: "nemotron-test", apiKey: "k", timeoutMs: 1000, reasoning: false };
 function countingFetch(content: unknown) {
   const calls = { n: 0 };
   const f = (async () => {
@@ -28,18 +29,18 @@ describe("S1 AI-path manipulation", () => {
   it("AI-derived ALLOWED is bound to the extracted terms and needs confirmation", async () => {
     const { f } = countingFetch(editorialRead);
     const app = await buildServer({ ai: cfg, fetchImpl: f });
-    const body = (await app.inject(analyze("Editorial, non-commercial post on our social feed in the US for 30 days."))).json();
+    const body = (await app.inject(analyze("Non-commercial post on our social feed in the US for 30 days."))).json();
     expect(body.decision).toBe("ALLOWED");
     expect(body.basis).toBe("ai_extraction");
-    expect(body.confirmation).toEqual({ required: true, terms: editorialRead.request, endpoint: "/api/v1/rights/evaluate" });
+    expect(body.confirmation).toEqual({ required: true, terms: editorialTerms, endpoint: "/api/v1/rights/evaluate" });
   });
 
   it("confirming the terms through /evaluate is the binding, structured decision", async () => {
     const app = await buildServer({ ai: null });
-    const res = await app.inject({ method: "POST", url: "/api/v1/rights/evaluate", payload: { policy, request: editorialRead.request } });
+    const res = await app.inject({ method: "POST", url: "/api/v1/rights/evaluate", payload: { policy, request: editorialTerms } });
     expect(res.json()).toMatchObject({ basis: "structured_terms", evaluation: { decision: "ALLOWED" } });
     // The real use (a commercial ad) evaluated as structured terms is denied.
-    const ad = { ...editorialRead.request, useType: "advertising", media: ["advertising"], commercial: true };
+    const ad = { ...editorialTerms, useType: "advertising", media: ["advertising"], commercial: true };
     const denied = await app.inject({ method: "POST", url: "/api/v1/rights/evaluate", payload: { policy, request: ad } });
     expect(denied.json().evaluation.decision).toBe("DENIED");
   });
@@ -151,5 +152,46 @@ describe("S5 response headers", () => {
       expect(res.headers["x-content-type-options"]).toBe("nosniff");
       expect(res.headers["referrer-policy"]).toBe("no-referrer");
     }
+  });
+});
+
+describe("token-lean AI path", () => {
+  function capturingFetch(content: unknown) {
+    const sent: Array<Record<string, any>> = [];
+    const f = (async (_url: string, init: RequestInit) => {
+      sent.push(JSON.parse(init.body as string));
+      return new Response(JSON.stringify({ model: "nemotron-test", choices: [{ finish_reason: "stop", message: { content: JSON.stringify(content) } }],
+        usage: { prompt_tokens: 240, completion_tokens: 70, completion_tokens_details: { reasoning_tokens: 0 } } }));
+    }) as typeof fetch;
+    return { f, sent };
+  }
+
+  it("never sends the policy to the model, and turns reasoning off", async () => {
+    const { f, sent } = capturingFetch(editorialRead);
+    const app = await buildServer({ ai: { ...cfg, reasoning: false }, fetchImpl: f });
+    await app.inject(analyze("Non-commercial post on our social feed in the US for 30 days."));
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(sent[0]!.max_tokens).toBeLessThanOrEqual(256);
+    const user = JSON.parse(sent[0]!.messages[1].content);
+    expect(Object.keys(user)).toEqual(["requestText"]);
+    expect(JSON.stringify(sent[0])).not.toMatch(/commercialUse|attributionRequired/);
+  });
+
+  it("takes fee and duration from the text only, and writes the explanation in code", async () => {
+    const { f } = capturingFetch(editorialRead);
+    const app = await buildServer({ ai: cfg, fetchImpl: f });
+    const body = (await app.inject(analyze("Non-commercial post on our social feed in the US for 2 weeks, fee $1,200."))).json();
+    expect(body.extractedRequest).toMatchObject({ durationDays: 14, offeredFeeMinor: 120000, currency: "USD" });
+    expect(body.ai.explanation).toBe("Editorial use on social in US for 14 days; non-commercial. Offers 1,200.00 USD.");
+  });
+
+  it("sends a request with two different fees to review", async () => {
+    const { f } = capturingFetch(editorialRead);
+    const app = await buildServer({ ai: cfg, fetchImpl: f });
+    const body = (await app.inject(analyze("Social post in the US for 30 days, $500 or maybe $900."))).json();
+    expect(body.decision).toBe("NEEDS_REVIEW");
+    expect(body.evaluation.reviews).toContain("ai_missing_information");
+    expect(body.ai.missingInformation).toEqual(["The request states more than one fee."]);
   });
 });

@@ -15,6 +15,8 @@ if (!cfg) {
   process.exit(1);
 }
 let pass = 0;
+let calls = 0;
+const tokens = { prompt: 0, completion: 0, reasoning: 0 };
 const files = (await readdir(dir)).filter((f) => f.endsWith(".json"));
 for (const f of files) {
   const fx = JSON.parse(await readFile(join(dir, f), "utf8"));
@@ -22,7 +24,13 @@ for (const f of files) {
   // Same order as the API: the deterministic pre-scan runs before the model.
   const ai = scanForInjection(fx.requestText).suspected
     ? null
-    : await extractUseRequest(cfg, { policy, requestText: fx.requestText });
+    : await extractUseRequest(cfg, { requestText: fx.requestText });
+  if (ai?.status === "ok" && ai.usage) {
+    tokens.prompt += ai.usage.prompt;
+    tokens.completion += ai.usage.completion;
+    tokens.reasoning += ai.usage.reasoning;
+    calls++;
+  }
   const decision =
     ai?.status === "ok" ? applyAIGate(evaluate(policy, ai.extraction.request), ai.extraction).decision : "NEEDS_REVIEW";
   const ok = (fx.acceptable as string[]).includes(decision);
@@ -41,4 +49,8 @@ for (const f of files) {
   }
 }
 console.log(`\n${pass}/${files.length} passed`);
+console.log(
+  `tokens over ${calls} model calls: prompt ${tokens.prompt}, completion ${tokens.completion} (reasoning ${tokens.reasoning})` +
+    ` — reasoning ${cfg.reasoning ? "on" : "off"}`,
+);
 process.exit(pass === files.length ? 0 : 1);

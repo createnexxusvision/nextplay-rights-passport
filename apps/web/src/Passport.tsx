@@ -87,7 +87,7 @@ export function Passport({ asset, disclose, onDisclose, contributorCount, splits
               {result.ai.status === "ok" && result.ai.explanation && (
                 <blockquote className="ai-read">
                   <p>{result.ai.explanation}</p>
-                  <footer>How Nemotron read the request. Advisory only.</footer>
+                  <footer>How the request was read: terms from Nemotron and the text. Advisory only.</footer>
                 </blockquote>
               )}
             </>

@@ -206,7 +206,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       });
     }
 
-    const ai = await extractUseRequest(deps.ai, { policy, requestText }, deps.fetchImpl);
+    const ai = await extractUseRequest(deps.ai, { requestText }, deps.fetchImpl);
     if (ai.status !== "ok") {
       // Degrade to manual review — never fabricate certainty.
       return {

@@ -94,6 +94,31 @@ export const AIExtraction = z
   .strict();
 export type AIExtraction = z.infer<typeof AIExtraction>;
 
+/**
+ * What the model itself returns: only the judgement calls, plus channel and
+ * country as fallbacks. Fee, duration and credit are read from the text by
+ * `extractRequestFacts()`, and the reviewer explanation is written by
+ * `describeUseRequest()` — both deterministic, both zero tokens.
+ */
+export const AIModelOutput = z
+  .object({
+    request: z
+      .object({
+        useType: UseType,
+        media: sortedUnique(Media),
+        territory: sortedUnique(Territory),
+        commercial: z.boolean(),
+        aiTraining: z.boolean(),
+        aiGeneration: z.boolean(),
+        likeness: z.boolean(),
+        sublicensing: z.boolean(),
+      })
+      .strict(),
+    confidence: z.number().min(0).max(1),
+  })
+  .strict();
+export type AIModelOutput = z.infer<typeof AIModelOutput>;
+
 export const SplitEntry = z
   .object({
     contributorRef: text(128, 1),
