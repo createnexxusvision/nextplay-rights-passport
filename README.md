@@ -36,7 +36,8 @@ A brand or AI agent asks *"can I use this asset for this purpose?"*. An NVIDIA N
 
 ```text
 packages/core        canonicalization, commitments, schemas, policy engine, splits, ledger boundary
-apps/api             Fastify API + Nebius/Nemotron gateway + eval runner
+agent/               the rights agent's home (Unix-style): etc/ config, bin/ tools, skills/ prompts, share/ data + context
+apps/api             Fastify API + agent runtime (src/agent) + Nebius/Nemotron gateway + eval runner
 apps/web             Vite + React app: register → splits → policy seal → request check → passport
 contracts/           Midnight RightsRegistry spec (wallet/token work gated, see contracts/README.md)
 evals/               fixed rights-analysis corpus (allowed / denied / ambiguous / injection)
@@ -64,7 +65,7 @@ npm run eval           # live Nemotron eval corpus (needs NEBIUS_*)
 |---|---|---|---|
 | GET | `/health` | n/a | Liveness and AI status |
 | POST | `/api/v1/rights/evaluate` | no | `{ policy, request, policySeal? }` → deterministic decision (`basis: "structured_terms"`) + signed receipt |
-| POST | `/api/v1/rights/analyze` | yes | `{ policy, requestText, policySeal? }` → injection pre-scan → Nemotron extraction → engine decision. An ALLOWED here is provisional until the requester confirms the extracted terms through `evaluate`. |
+| POST | `/api/v1/rights/analyze` | yes | `{ policy, requestText, policySeal? }` → the agent loop (see [`agent/README.md`](agent/README.md)) → engine decision, plus an `agent` trace (path, steps, tokens). An ALLOWED here is provisional until the requester confirms the extracted terms through `evaluate`. |
 | GET | `/api/v1/keys` | n/a | Ed25519 public keys for verifying decision receipts |
 
 `policySeal` is `{ commitment, salt }`, the opening of the caller's policy seal. With it, the API binds its signed receipt to that seal. Server settings (`AI_DAILY_CALL_LIMIT`, `TRUST_PROXY`, `RECEIPT_SIGNING_KEY`) are documented in [`.env.example`](.env.example). See [`docs/CRYPTOGRAPHY.md`](docs/CRYPTOGRAPHY.md) for every scheme and its parameters.

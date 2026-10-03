@@ -95,29 +95,33 @@ export const AIExtraction = z
 export type AIExtraction = z.infer<typeof AIExtraction>;
 
 /**
- * What the model itself returns: only the judgement calls, plus channel and
- * country as fallbacks. Fee, duration and credit are read from the text by
- * `extractRequestFacts()`, and the reviewer explanation is written by
- * `describeUseRequest()` — both deterministic, both zero tokens.
+ * One reading of a request as the model sees it: only the judgement calls,
+ * plus channel and country as fallbacks. Fee, duration and credit are read
+ * from the text by code; the explanation is written by `describeUseRequest()`.
  */
-export const AIModelOutput = z
+export const ModelRequest = z
   .object({
-    request: z
-      .object({
-        useType: UseType,
-        media: sortedUnique(Media),
-        territory: sortedUnique(Territory),
-        commercial: z.boolean(),
-        aiTraining: z.boolean(),
-        aiGeneration: z.boolean(),
-        likeness: z.boolean(),
-        sublicensing: z.boolean(),
-      })
-      .strict(),
-    confidence: z.number().min(0).max(1),
+    useType: UseType,
+    media: sortedUnique(Media),
+    territory: sortedUnique(Territory),
+    commercial: z.boolean(),
+    aiTraining: z.boolean(),
+    aiGeneration: z.boolean(),
+    likeness: z.boolean(),
+    sublicensing: z.boolean(),
   })
   .strict();
+export type ModelRequest = z.infer<typeof ModelRequest>;
+
+/** Fast path (`classify`): one reading. */
+export const AIModelOutput = z.object({ request: ModelRequest, confidence: z.number().min(0).max(1) }).strict();
 export type AIModelOutput = z.infer<typeof AIModelOutput>;
+
+/** Deep path (`plan`): up to 3 plausible readings, most likely first. */
+export const AIPlanOutput = z
+  .object({ readings: z.array(ModelRequest).min(1).max(3), confidence: z.number().min(0).max(1) })
+  .strict();
+export type AIPlanOutput = z.infer<typeof AIPlanOutput>;
 
 export const SplitEntry = z
   .object({

@@ -1,0 +1,24 @@
+{
+  "note": "names are case-insensitive. codes are case-SENSITIVE so the pronoun 'us' never reads as the United States. 'American' is excluded on purpose: 'American football' is a sport.",
+  "names": {
+    "WORLD": "\\b(?:worldwide|world-?wide|global(?:ly)?|international(?:ly)?|all\\s+countries|every\\s+country)\\b",
+    "US": "\\b(?:united\\s+states|america)\\b",
+    "GB": "\\b(?:united\\s+kingdom|britain|british|england|scotland|wales)\\b",
+    "CA": "\\b(?:canada|canadian)\\b",
+    "MX": "\\b(?:mexico|mexican)\\b",
+    "DE": "\\b(?:germany|german)\\b",
+    "FR": "\\b(?:france|french)\\b",
+    "ES": "\\b(?:spain|spanish)\\b",
+    "IT": "\\b(?:italy|italian)\\b",
+    "IE": "\\b(?:ireland|irish)\\b",
+    "NL": "\\b(?:netherlands|dutch)\\b",
+    "JP": "\\b(?:japan|japanese)\\b",
+    "AU": "\\b(?:australia|australian)\\b",
+    "BR": "\\b(?:brazil|brazilian)\\b",
+    "IN": "\\b(?:india)\\b"
+  },
+  "codes": {
+    "US": "\\b(?:US|USA|U\\.S\\.(?:A\\.)?)(?![A-Za-z])",
+    "GB": "\\b(?:UK|U\\.K\\.|GB)(?![A-Za-z])"
+  }
+}

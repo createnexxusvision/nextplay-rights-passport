@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildServer } from "../src/server.js";
+import { fakeNebius } from "./fake-nebius.js";
 
 const policy = {
   version: 1, territory: ["US"], media: ["social", "advertising"], durationDays: 30,
@@ -14,7 +15,7 @@ const extraction = {
   confidence: 0.93,
 };
 const structured = { ...extraction.request, durationDays: 30, offeredFeeMinor: 250000, currency: "USD" };
-const cfg = { baseUrl: "https://example.invalid/v1", model: "nemotron-test", apiKey: "k", timeoutMs: 1000, reasoning: false };
+const cfg = { baseUrl: "https://example.invalid/v1", model: "nemotron-test", apiKey: "k", timeoutMs: 1000, reasoning: "auto" as const };
 const fakeFetch = (content: string): typeof fetch =>
   (async () => new Response(JSON.stringify({ model: "nemotron-test", choices: [{ message: { content } }] }))) as typeof fetch;
 
@@ -26,7 +27,7 @@ describe("rights api", () => {
     expect(res.json().evaluation.decision).toBe("ALLOWED");
   });
   it("analyze: model extracts, engine denies", async () => {
-    const app = await buildServer({ ai: cfg, fetchImpl: fakeFetch(JSON.stringify(extraction)) });
+    const app = await buildServer({ ai: cfg, fetchImpl: fakeNebius({ readings: [extraction.request], confidence: extraction.confidence }).f });
     const res = await app.inject({ method: "POST", url: "/api/v1/rights/analyze", payload: { policy, requestText: "AI ad with his face, $2,500, US, 30 days" } });
     const body = res.json();
     expect(body.decision).toBe("DENIED");

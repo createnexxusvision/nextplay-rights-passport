@@ -24,6 +24,7 @@ export const REASON_TEXT: Record<ReasonCode, string> = {
   ai_low_confidence: "The AI wasn't confident it read the request correctly.",
   ai_missing_information: "The AI flagged details the request leaves out.",
   ai_unavailable: "Automatic reading is off, so a person has to read this request.",
+  ai_readings_disagree: "The request can reasonably be read more than one way, and the readings lead to different decisions.",
   request_injection_suspected: "The request text tries to give the AI instructions, so a person has to read it.",
 };
 

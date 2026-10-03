@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildServer } from "../src/server.js";
 import { clientKey, parseTrustProxy, peerAllowed } from "../src/proxy.js";
 import { loadAIConfig } from "../src/ai-gateway.js";
+import { fakeNebius } from "./fake-nebius.js";
 
 const policy = {
   version: 1, territory: ["US"], media: ["social", "advertising"], durationDays: 30,
@@ -14,14 +15,10 @@ const editorialRead = {
   confidence: 0.95,
 };
 const editorialTerms = { ...editorialRead.request, durationDays: 30 };
-const cfg = { baseUrl: "https://example.invalid/v1", model: "nemotron-test", apiKey: "k", timeoutMs: 1000, reasoning: false };
-function countingFetch(content: unknown) {
-  const calls = { n: 0 };
-  const f = (async () => {
-    calls.n++;
-    return new Response(JSON.stringify({ model: "nemotron-test", choices: [{ message: { content: JSON.stringify(content) } }] }));
-  }) as typeof fetch;
-  return { f, calls };
+const cfg = { baseUrl: "https://example.invalid/v1", model: "nemotron-test", apiKey: "k", timeoutMs: 1000, reasoning: "auto" as const };
+function countingFetch(content: { request: Record<string, unknown>; confidence: number }) {
+  const fake = fakeNebius({ readings: [content.request], confidence: content.confidence });
+  return { f: fake.f, calls: { get n() { return fake.calls.length; } } };
 }
 const analyze = (requestText: string) => ({ method: "POST" as const, url: "/api/v1/rights/analyze", payload: { policy, requestText } });
 
@@ -156,26 +153,22 @@ describe("S5 response headers", () => {
 });
 
 describe("token-lean AI path", () => {
-  function capturingFetch(content: unknown) {
-    const sent: Array<Record<string, any>> = [];
-    const f = (async (_url: string, init: RequestInit) => {
-      sent.push(JSON.parse(init.body as string));
-      return new Response(JSON.stringify({ model: "nemotron-test", choices: [{ finish_reason: "stop", message: { content: JSON.stringify(content) } }],
-        usage: { prompt_tokens: 240, completion_tokens: 70, completion_tokens_details: { reasoning_tokens: 0 } } }));
-    }) as typeof fetch;
-    return { f, sent };
-  }
+  const capturingFetch = (content: { request: Record<string, unknown>; confidence: number }) => {
+    const fake = fakeNebius({ readings: [content.request], confidence: content.confidence });
+    return { f: fake.f, sent: fake.calls.map((c) => c.body), calls: fake.calls };
+  };
 
   it("never sends the policy to the model, and turns reasoning off", async () => {
-    const { f, sent } = capturingFetch(editorialRead);
-    const app = await buildServer({ ai: { ...cfg, reasoning: false }, fetchImpl: f });
-    await app.inject(analyze("Non-commercial post on our social feed in the US for 30 days."));
-    expect(sent).toHaveLength(1);
-    expect(sent[0]!.chat_template_kwargs).toEqual({ enable_thinking: false });
-    expect(sent[0]!.max_tokens).toBeLessThanOrEqual(256);
-    const user = JSON.parse(sent[0]!.messages[1].content);
-    expect(Object.keys(user)).toEqual(["requestText"]);
-    expect(JSON.stringify(sent[0])).not.toMatch(/commercialUse|attributionRequired/);
+    const { f, calls } = capturingFetch(editorialRead);
+    const app = await buildServer({ ai: cfg, fetchImpl: f });
+    await app.inject(analyze("Repost on our social feed in the US for 30 days."));
+    expect(calls).toHaveLength(1);
+    const sent = calls[0]!.body;
+    expect(calls[0]!.phase).toBe("classify");
+    expect(sent.chat_template_kwargs).toEqual({ enable_thinking: false });
+    expect(sent.max_tokens).toBeLessThanOrEqual(256);
+    expect(Object.keys(JSON.parse(sent.messages[1].content))).toEqual(["requestText"]);
+    expect(JSON.stringify(sent)).not.toMatch(/commercialUse|attributionRequired|minimumFee/);
   });
 
   it("takes fee and duration from the text only, and writes the explanation in code", async () => {

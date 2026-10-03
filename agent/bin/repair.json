@@ -1,0 +1,1 @@
+{ "name": "repair", "kind": "code", "summary": "Makes each reading internally consistent, only ever in the cautious direction (e.g. advertising implies commercial).", "reads": [], "tokens": 0 }

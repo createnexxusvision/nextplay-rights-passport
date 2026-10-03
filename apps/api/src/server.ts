@@ -3,11 +3,9 @@ import rateLimit from "@fastify/rate-limit";
 import cors from "@fastify/cors";
 import { z } from "zod";
 import {
-  applyAIGate,
   commit,
   evaluate,
   RightsPolicy,
-  scanForInjection,
   UseRequest,
   verifyOpening,
   canonicalize,
@@ -16,7 +14,10 @@ import {
   type ReceiptBasis,
   type ReceiptSigner,
 } from "@nextplay/core";
-import { extractUseRequest, type AIConfig } from "./ai-gateway.js";
+import type { AIConfig } from "./ai-gateway.js";
+import { DailyBudget } from "./agent/budget.js";
+import { loadAgentHome, type AgentHome } from "./agent/home.js";
+import { runAgent, type AgentContext } from "./agent/runtime.js";
 import { clientKey, peerAllowed, type TrustProxyMode } from "./proxy.js";
 
 /**
@@ -35,6 +36,10 @@ export interface ServerDeps {
   trustProxy?: TrustProxyMode;
   /** Global cap on model calls per UTC day (S2). 0 or undefined = unlimited (dev only). */
   aiDailyCallLimit?: number;
+  /** Global cap on billed model tokens per UTC day (Nebius credit ceiling). 0 or undefined = unlimited (dev only). */
+  aiDailyTokenBudget?: number;
+  /** The agent's home (agent/). Default: loaded from the repo's agent/ directory. */
+  agentHome?: AgentHome;
   /** Signs decision receipts (C2). Without it, no receipts are issued. */
   signer?: ReceiptSigner;
   /** Rotated-out public keys still published so old receipts verify. */
@@ -55,30 +60,14 @@ const EvaluateBody = z.object({ policy: RightsPolicy, request: UseRequest, polic
 /** Fallback the client shows whenever the AI path can't answer. */
 const FORM_FALLBACK = "Automatic extraction unavailable. Use the structured request form.";
 
-/**
- * Global daily counter for model calls (S2). In-memory: one API instance.
- * Running several replicas multiplies the effective cap — see the security review.
- */
-class DailyCounter {
-  private day = "";
-  private count = 0;
-  constructor(private readonly limit: number, private readonly now: () => Date) {}
-  tryTake(): boolean {
-    if (this.limit <= 0) return true;
-    const today = this.now().toISOString().slice(0, 10);
-    if (today !== this.day) {
-      this.day = today;
-      this.count = 0;
-    }
-    if (this.count >= this.limit) return false;
-    this.count++;
-    return true;
-  }
-}
-
 export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   const trustProxy = deps.trustProxy ?? "none";
-  const aiBudget = new DailyCounter(deps.aiDailyCallLimit ?? 0, deps.now ?? (() => new Date()));
+  const agent: AgentContext = {
+    home: deps.agentHome ?? loadAgentHome(),
+    ai: deps.ai,
+    budget: new DailyBudget(deps.aiDailyCallLimit ?? 0, deps.aiDailyTokenBudget ?? 0, deps.now ?? (() => new Date())),
+    ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
+  };
 
   const app = Fastify({
     bodyLimit: 64 * 1024,
@@ -178,10 +167,12 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     const { policy, requestText, policySeal } = parsed.data;
     if (policySeal && !(await sealMatches(policy, policySeal))) return reply.code(400).send({ error: "policy_seal_mismatch" });
 
-    // S1: deterministic tripwire before the model sees anything. A hit never reaches the AI.
-    const scan = scanForInjection(requestText);
-    if (scan.suspected) {
-      req.log.warn({ injection: scan.matches }, "injection pre-scan hit");
+    // The agent loop: prescan → facts → triage → classify|plan → repair → evaluate → verify → explain.
+    const out = await runAgent(agent, policy, requestText);
+
+    if (out.kind === "injection") {
+      // S1: deterministic tripwire before the model sees anything. A hit never reaches the AI.
+      req.log.warn({ injection: out.matches }, "injection pre-scan hit");
       return {
         evaluation: null,
         decision: "NEEDS_REVIEW",
@@ -192,9 +183,8 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
         advisory: "The request text contains instructions aimed at the AI. A person must read it, or use the structured request form.",
       };
     }
-
-    // S2: global spend cap. Checked only when the model would actually be called.
-    if (deps.ai && !aiBudget.tryTake()) {
+    if (out.kind === "budget") {
+      // S2 + credit ceiling: daily call or token budget used up.
       return reply.code(503).send({
         error: "ai_daily_limit_reached",
         decision: "NEEDS_REVIEW",
@@ -205,43 +195,44 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
         advisory: FORM_FALLBACK,
       });
     }
-
-    const ai = await extractUseRequest(deps.ai, { requestText }, deps.fetchImpl);
-    if (ai.status !== "ok") {
+    if (out.kind !== "ok") {
       // Degrade to manual review — never fabricate certainty.
       return {
         evaluation: null,
         decision: "NEEDS_REVIEW",
         reviews: ["ai_unavailable"],
-        ai: ai.status === "disabled" ? { status: "disabled" } : { status: "error", reason: ai.reason, model: ai.model },
+        ai: out.kind === "disabled" ? { status: "disabled" } : { status: "error", reason: out.reason, model: out.model },
+        ...(out.kind === "error" ? { agent: out.trace } : {}),
         fallback: "structured_form",
         humanReviewRequired: true,
         advisory: FORM_FALLBACK,
       };
     }
-    const engine = evaluate(policy, ai.extraction.request);
-    const gated = applyAIGate(engine, ai.extraction);
+    const { evaluation, request } = out;
+    req.log.info({ agent: { path: out.trace.path, calls: out.trace.modelCalls, tokens: out.trace.tokens } }, "agent done");
     return {
-      evaluation: gated,
-      decision: gated.decision,
+      evaluation,
+      decision: evaluation.decision,
       // S1: an AI-derived decision only covers the terms the AI extracted, never the prose.
       // ALLOWED is provisional until the requester confirms these exact terms via /evaluate.
       basis: "ai_extraction",
-      extractedRequest: ai.extraction.request,
-      confirmation: gated.decision === "ALLOWED"
-        ? { required: true, terms: ai.extraction.request, endpoint: "/api/v1/rights/evaluate" }
+      extractedRequest: request,
+      confirmation: evaluation.decision === "ALLOWED"
+        ? { required: true, terms: request, endpoint: "/api/v1/rights/evaluate" }
         : { required: false },
       ai: {
         status: "ok",
-        model: ai.model,
-        latencyMs: ai.latencyMs,
-        confidence: ai.extraction.confidence,
-        missingInformation: ai.extraction.missingInformation,
-        ambiguities: ai.extraction.ambiguities,
-        explanation: ai.extraction.explanation,
+        model: out.model,
+        latencyMs: out.latencyMs,
+        confidence: out.confidence,
+        missingInformation: out.missingInformation,
+        ambiguities: [],
+        explanation: out.explanation,
       },
-      humanReviewRequired: gated.decision !== "ALLOWED",
-      ...(await issueReceipt(policySeal, gated, ai.extraction.request, "ai_extraction", ai.model)),
+      // How the agent got there: path, loop steps, readings, tokens. Never contains request text.
+      agent: out.trace,
+      humanReviewRequired: evaluation.decision !== "ALLOWED",
+      ...(await issueReceipt(policySeal, evaluation, request, "ai_extraction", out.model)),
       advisory: "AI output is advisory. The decision comes from the deterministic policy engine, not the model, and covers only the extracted terms shown.",
     };
   });

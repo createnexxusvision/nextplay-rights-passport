@@ -1,0 +1,1 @@
+{ "name": "plan", "kind": "model", "summary": "Reasons about the request and brainstorms up to 3 plausible readings, most likely first, so the engine can test each one.", "reads": ["skills/plan.md", "share/context/field-rules.md"], "tokens": "etc/agent.json phases.plan.maxTokens" }

@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { extractRequestFacts, mergeRequest, type ModelRequest } from "../src/request-facts.js";
+import type { ModelRequest } from "@nextplay/core";
+import { extractRequestFacts, mergeRequest } from "../src/agent/facts.js";
+import { loadAgentHome } from "../src/agent/home.js";
 
-const f = extractRequestFacts;
+// Tables come from agent/share/data — the same files the running API loads.
+const tables = loadAgentHome().facts;
+const f = (text: string) => extractRequestFacts(text, tables);
 
 describe("deterministic request facts", () => {
   it.each([

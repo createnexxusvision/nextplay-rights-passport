@@ -1,0 +1,12 @@
+{
+  "note": "Any match sends the request to the deep path (plan, reasoning on). Everything else takes the fast path (classify, no reasoning). Case-insensitive.",
+  "deepIf": [
+    "\\b(?:sponsor(?:ed|ship)?|brand(?:ed)?|partner(?:s|ship)?|endorse(?:ment)?|ambassador|promot(?:e|ion|ional)|influencer)\\b",
+    "\\b(?:ai|a\\.i\\.|artificial\\s+intelligence|generat(?:e|ed|ive|ion)|synthetic|deep\\s*fake|avatar|digital\\s+(?:twin|double))\\b",
+    "\\b(?:train(?:ing)?|dataset|data\\s+set|model)\\b",
+    "\\b(?:face|voice|likeness|image\\s+rights|name\\s+and\\s+likeness|nil)\\b",
+    "\\b(?:remix|edit(?:ed)?|alter(?:ed)?|modif(?:y|ied))\\b",
+    "\\b(?:non-?commercial|editorial)\\b[\\s\\S]*\\b(?:paid|fee|\\$|sponsor|ad)\\b",
+    "\\b(?:sublicen[cs]e|resell|third\\s+part(?:y|ies)|share\\s+with)\\b"
+  ]
+}

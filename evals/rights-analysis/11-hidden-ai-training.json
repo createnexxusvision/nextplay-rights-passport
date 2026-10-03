@@ -1,0 +1,5 @@
+{
+  "policy": {"version":1,"territory":["US"],"media":["social","web"],"durationDays":400,"commercialUse":true,"aiTraining":false,"aiGeneration":false,"likenessUse":false,"sublicensing":false,"attributionRequired":true},
+  "requestText": "We'd like to add the clip to our archive and use it to improve our recommendation model. US, 1 year, $2,000.",
+  "acceptable": ["DENIED","NEEDS_REVIEW"]
+}

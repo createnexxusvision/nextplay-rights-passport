@@ -28,25 +28,22 @@ Setup:
 
 `npm run models` listed four Nemotron models: `NVIDIA-Nemotron-3-Nano-30B-A3B`, `Nemotron-3_5-Lightning`, `nemotron-3-super-120b-a12b` and `Nemotron-3-Ultra-550b-a55b`. We use **`nvidia/nemotron-3-super-120b-a12b`**.
 
-**The model only makes judgement calls.** Everything code can read the same way every time, code reads:
+The model runs inside the agent loop described in [`agent/README.md`](../agent/README.md). Code does everything it can do deterministically, at zero tokens: the injection pre-scan, fee/duration/channels/countries/credit, triage, cautious repairs, the engine decision and the explanation. The model only makes judgement calls:
+- **Fast path** (`classify`, reasoning off): clear requests. One reading, ~350 tokens.
+- **Deep path** (`plan`, reasoning on at low effort): requests with a judgement call (sponsor, AI, face or voice, editorial-but-paid…), or an unsure or self-contradicting fast answer. Up to 3 readings, ~550 tokens. The engine decides each reading; if the readings disagree, a person decides.
 
-| Who | What |
-|---|---|
-| Code (`extractRequestFacts`) | fee and currency, duration (incl. "2 weeks", "60-day", "perpetual"), channels (Instagram → social, website → web…), countries, credit offered. A fee or duration not in the text is never used. Two different fees or durations → human review. |
-| Code (`describeUseRequest`) | the plain-language explanation shown to reviewers |
-| Nemotron | use type, commercial, likeness, AI generation/training, sublicensing, confidence; channels/countries only as a fallback when code finds none |
+The policy is never sent to the model.
 
-The policy is **not** sent to the model: extraction doesn't need the owner's private terms.
+**Tokens, eval corpus** (`npm run eval`, single runs):
 
-**Tokens, 8 eval calls** (the injection case never reaches the model):
+| Setup | Calls | Prompt | Output (reasoning) | Eval |
+|---|---|---|---|---|
+| Original (reasoning on, policy sent, model writes everything) | 8 | 6,314 | 8,024 (6,502) | 6/9 → 9/9 after fixes |
+| Agent loop | 8 | 2,600 | 738 (134) | 9/9 |
+| Agent loop, judgement cases 10–11 | 2 | 690 | 150 (5) | 2/2 |
 
-| | Before | Now |
-|---|---|---|
-| Output | 8,024 (6,502 of it hidden reasoning) | **559** |
-| Prompt | 6,314 | **1,930** |
-| Eval | 9/9 | **9/9** (3 runs in a row) |
+**Credit guard.** `AI_DAILY_TOKEN_BUDGET` (billed tokens per UTC day) and `AI_DAILY_CALL_LIMIT`. A call only starts if its worst case fits; otherwise the deep pass is skipped (the fast result stays cautious) or `/analyze` returns 503 and the form takes over. `npm run eval` is capped at `EVAL_TOKEN_CAP` (25,000) per run; `EVAL_ONLY=10,11` runs a subset. `AI_REASONING=off` turns reasoning off everywhere.
 
 Wiring notes:
-- Reasoning is off by default via `chat_template_kwargs: { enable_thinking: false }` (`/no_think` has no effect on Token Factory; `reasoning_effort: "low"` only halves it). Set `AI_REASONING=on` to compare. `finish_reason: "length"` is reported as `truncated`.
-- `response_format: json_schema` constrains output to valid enum values (without it we saw `"aiGeneration"` for `"ai_generation"` about 1 time in 10). The strict zod parse stays the final check.
-- `npm run eval` prints token totals per run.
+- Reasoning on/off per call via `chat_template_kwargs: { enable_thinking }`, with `reasoning_effort` bounding it (`/no_think` has no effect on Token Factory). `finish_reason: "length"` is reported as `truncated`.
+- `response_format: json_schema` constrains output to valid enum values; the strict zod parse stays the final check.

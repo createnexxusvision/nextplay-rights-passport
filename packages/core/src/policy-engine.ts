@@ -25,7 +25,8 @@ export type ReasonCode =
   | "ai_low_confidence"
   | "ai_missing_information"
   | "ai_unavailable"
-  | "request_injection_suspected";
+  | "request_injection_suspected"
+  | "ai_readings_disagree";
 
 export interface Evaluation {
   decision: Decision;
