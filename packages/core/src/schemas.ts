@@ -5,6 +5,12 @@ import { z } from "zod";
  * a commitment, or coming back from the AI passes through here first.
  * Unordered sets are sorted + de-duplicated so commitments are stable.
  */
+/**
+ * Free text is NFC-normalized (S11): "é" typed as one code point or as
+ * "e" + combining accent must canonicalize — and hash — identically.
+ */
+export const text = (max: number, min = 0) => z.string().min(min).max(max).transform((s) => s.normalize("NFC"));
+
 const sortedUnique = <T extends z.ZodTypeAny>(item: T) =>
   z.array(item).transform((xs) => [...new Set(xs)].sort() as z.infer<T>[]);
 
@@ -80,9 +86,9 @@ export type UseRequest = z.infer<typeof UseRequest>;
 export const AIExtraction = z
   .object({
     request: UseRequest,
-    missingInformation: z.array(z.string().max(200)).max(20),
-    ambiguities: z.array(z.string().max(300)).max(20),
-    explanation: z.string().max(2000),
+    missingInformation: z.array(text(200)).max(20),
+    ambiguities: z.array(text(300)).max(20),
+    explanation: text(2000),
     confidence: z.number().min(0).max(1),
   })
   .strict();
@@ -90,7 +96,7 @@ export type AIExtraction = z.infer<typeof AIExtraction>;
 
 export const SplitEntry = z
   .object({
-    contributorRef: z.string().min(1).max(128),
+    contributorRef: text(128, 1),
     role: z.enum(["athlete", "creator", "filmer", "editor", "producer", "agent", "licensor", "other"]),
     bps: z.number().int().positive().max(10000),
   })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commit, contentHash, verifyOpening, randomSalt } from "../src/index.js";
+import { AIExtraction, commit, contentHash, verifyOpening, randomSalt, SplitEntry } from "../src/index.js";
 
 const terms = { fee: 50000, territory: ["US"], pct: 7000 };
 
@@ -34,5 +34,19 @@ describe("commitments", () => {
     expect(await contentHash(new TextEncoder().encode("abc"))).toBe(
       "0xba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
     );
+  });
+});
+
+describe("unicode normalization (S11)", () => {
+  it("NFC and NFD free text parse to the same value and the same commitment", async () => {
+    const nfc = SplitEntry.parse({ contributorRef: "José", role: "athlete", bps: 10000 });
+    const nfd = SplitEntry.parse({ contributorRef: "José", role: "athlete", bps: 10000 });
+    expect(nfd).toEqual(nfc);
+    const salt = "0x" + "07".repeat(32);
+    expect((await commit("split", nfd, salt)).commitment).toEqual((await commit("split", nfc, salt)).commitment);
+  });
+  it("normalizes AI free text too", () => {
+    const base = { request: { useType: "social", media: [], territory: [], commercial: false, aiTraining: false, aiGeneration: false, likeness: false, sublicensing: false }, missingInformation: [], ambiguities: [], confidence: 1 };
+    expect(AIExtraction.parse({ ...base, explanation: "Café" }).explanation).toBe("Café");
   });
 });

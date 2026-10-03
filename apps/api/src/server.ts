@@ -49,7 +49,7 @@ const Hex32 = z.string().regex(/^0x[0-9a-fA-F]{64}$/);
  * used once to check the seal and is never logged or stored.
  */
 const PolicySeal = z.object({ commitment: Hex32, salt: Hex32 }).strict();
-const AnalyzeBody = z.object({ policy: RightsPolicy, requestText: z.string().trim().min(1).max(4000), policySeal: PolicySeal.optional() }).strict();
+const AnalyzeBody = z.object({ policy: RightsPolicy, requestText: z.string().trim().min(1).max(4000).transform((s) => s.normalize("NFC")), policySeal: PolicySeal.optional() }).strict();
 const EvaluateBody = z.object({ policy: RightsPolicy, request: UseRequest, policySeal: PolicySeal.optional() }).strict();
 
 /** Fallback the client shows whenever the AI path can't answer. */
