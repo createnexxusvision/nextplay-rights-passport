@@ -14,9 +14,10 @@ import {
   type RightsPolicy,
 } from "@nextplay/core";
 import { callModel, CLASSIFY_JSON_SCHEMA, planJsonSchema, type AIConfig, type TokenUsage } from "../ai-gateway.js";
-import type { DailyBudget } from "./budget.js";
+import { PROMPT_ALLOWANCE, type DailyBudget } from "./budget.js";
 import { extractRequestFacts, mergeRequest } from "./facts.js";
-import type { AgentHome, ModelPhase } from "./home.js";
+import type { AgentHome, ModelPhase, Tier } from "./home.js";
+import { costUsd, measureWorkload, route } from "./router.js";
 
 /**
  * The rights agent loop. Runs the fixed pipeline from agent/etc/agent.json:
@@ -44,6 +45,11 @@ export interface AgentTrace {
   readingDecisions: Decision[];
   repairs: string[];
   tokens: TokenUsage;
+  /** Workload score the router used (judgement signals, conflicts, length, prior miss). */
+  workload: number;
+  /** One entry per model call: which tier and model did which work, and what it cost. */
+  calls: Array<{ phase: ModelPhase; tier: Tier; model: string; tokens: TokenUsage; usd: number; ok: boolean }>;
+  usd: number;
 }
 
 interface ScoredReading {
@@ -91,7 +97,12 @@ export async function runAgent(ctx: AgentContext, policy: RightsPolicy, requestT
     readingDecisions: [],
     repairs: [],
     tokens: { prompt: 0, completion: 0, reasoning: 0 },
+    workload: 0,
+    calls: [],
+    usd: 0,
   };
+  const load = measureWorkload(home, requestText, facts.conflicts.length);
+  let floor: Tier | null = null; // smallest tier that already missed on this request
 
   let phase: ModelPhase = deep ? "plan" : "classify";
   let best: { phase: ModelPhase; readings: ScoredReading[]; confidence: number; model: string } | null = null;
@@ -99,8 +110,11 @@ export async function runAgent(ctx: AgentContext, policy: RightsPolicy, requestT
 
   while (trace.modelCalls < loop.maxIterations) {
     const p = phases[phase];
+    // Route: the cheapest model tier that fits this work (code, zero tokens).
+    const r = route(home, ai, budget, phase, { ...load, priorMiss: floor !== null }, floor, p.maxTokens, PROMPT_ALLOWANCE);
+    trace.workload = r.score;
     // Hard budget: no call starts unless its worst case still fits today's caps.
-    if (!budget.tryReserve(p.maxTokens)) {
+    if (!budget.tryReserve(p.maxTokens, r.worstCaseUsd)) {
       if (!best) return { kind: "budget" };
       trace.steps.push(`${phase}:skipped-budget`);
       break;
@@ -112,6 +126,7 @@ export async function runAgent(ctx: AgentContext, policy: RightsPolicy, requestT
     const call = await callModel(
       ai,
       {
+        model: r.model,
         system: home.prompts[phase],
         requestText,
         schema: phase === "plan" ? planJsonSchema(p.maxReadings ?? 3) : CLASSIFY_JSON_SCHEMA,
@@ -120,7 +135,9 @@ export async function runAgent(ctx: AgentContext, policy: RightsPolicy, requestT
       },
       ctx.fetchImpl,
     );
-    budget.spend(call.usage.prompt + call.usage.completion);
+    const usd = costUsd(home, r.tier, call.usage.prompt, call.usage.completion);
+    budget.spend(call.usage.prompt + call.usage.completion, usd);
+    trace.usd += usd;
     trace.tokens.prompt += call.usage.prompt;
     trace.tokens.completion += call.usage.completion;
     trace.tokens.reasoning += call.usage.reasoning;
@@ -135,9 +152,17 @@ export async function runAgent(ctx: AgentContext, policy: RightsPolicy, requestT
         confidence = parsed.data.confidence;
       }
     }
+    trace.calls.push({ phase, tier: r.tier, model: r.model, tokens: call.usage, usd, ok: readings !== null });
     if (!readings) {
       // A failed deep pass after a good fast pass keeps the fast result (the gate stays cautious).
       if (best) break;
+      // A failed cheap call moves UP a tier for the next attempt, never down.
+      if (home.models.routing.escalateOnFailure && trace.modelCalls < loop.maxIterations) {
+        floor = r.tier;
+        trace.escalated = true;
+        phase = "plan";
+        continue;
+      }
       return { kind: "error", reason: call.status === "error" ? call.reason : "schema", model: call.model, trace };
     }
 
@@ -161,6 +186,7 @@ export async function runAgent(ctx: AgentContext, policy: RightsPolicy, requestT
     const unsure = confidence < loop.minConfidence || (loop.escalateOnRepair && scored[0]!.repairs.length > 0);
     if (phase === "classify" && unsure && trace.modelCalls < loop.maxIterations) {
       trace.escalated = true;
+      floor = r.tier;
       phase = "plan";
       continue;
     }

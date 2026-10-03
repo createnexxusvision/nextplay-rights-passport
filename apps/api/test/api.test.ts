@@ -15,7 +15,7 @@ const extraction = {
   confidence: 0.93,
 };
 const structured = { ...extraction.request, durationDays: 30, offeredFeeMinor: 250000, currency: "USD" };
-const cfg = { baseUrl: "https://example.invalid/v1", model: "nemotron-test", apiKey: "k", timeoutMs: 1000, reasoning: "auto" as const };
+const cfg = { baseUrl: "https://example.invalid/v1", model: "nemotron-test", apiKey: "k", timeoutMs: 1000, reasoning: "auto" as const, routing: "auto" as const };
 const fakeFetch = (content: string): typeof fetch =>
   (async () => new Response(JSON.stringify({ model: "nemotron-test", choices: [{ message: { content } }] }))) as typeof fetch;
 

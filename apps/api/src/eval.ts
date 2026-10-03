@@ -20,14 +20,14 @@ if (!ai) {
   console.error("Set NEBIUS_BASE_URL, NEBIUS_MODEL, NEBIUS_API_KEY to run evals.");
   process.exit(1);
 }
-const ctx = { home: loadAgentHome(), ai, budget: new DailyBudget(0, Number(process.env.EVAL_TOKEN_CAP ?? 25_000)) };
+const ctx = { home: loadAgentHome(), ai, budget: new DailyBudget(0, Number(process.env.EVAL_TOKEN_CAP ?? 25_000), Number(process.env.EVAL_USD_CAP ?? 0.05)) };
 // EVAL_ONLY=10,11 runs just those cases (saves credit while iterating).
 const only = (process.env.EVAL_ONLY ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 const files = (await readdir(dir))
   .filter((f) => f.endsWith(".json") && (only.length === 0 || only.some((p) => f.startsWith(p))))
   .sort();
 let pass = 0;
-const total = { prompt: 0, completion: 0, reasoning: 0, calls: 0 };
+const total = { prompt: 0, completion: 0, reasoning: 0, calls: 0, usd: 0 };
 for (const f of files) {
   const fx = JSON.parse(await readFile(join(dir, f), "utf8"));
   const out = await runAgent(ctx, RightsPolicy.parse(fx.policy), fx.requestText);
@@ -40,9 +40,10 @@ for (const f of files) {
     total.completion += t.tokens.completion;
     total.reasoning += t.tokens.reasoning;
     total.calls += t.modelCalls;
+    total.usd += t.usd;
   }
   const how = out.kind === "ok" || out.kind === "error"
-    ? `${out.trace.path}${out.trace.escalated ? "→deep" : ""} calls ${out.trace.modelCalls} tokens ${out.trace.tokens.prompt}+${out.trace.tokens.completion} (r ${out.trace.tokens.reasoning})`
+    ? `${out.trace.path}${out.trace.escalated ? "→deep" : ""} [${out.trace.calls.map((c) => `${c.phase}:${c.tier}${c.ok ? "" : "✗"}`).join(" ")}] tokens ${out.trace.tokens.prompt}+${out.trace.tokens.completion} (r ${out.trace.tokens.reasoning}) $${out.trace.usd.toFixed(6)}`
     : out.kind;
   console.log(`${ok ? "PASS" : "FAIL"}  ${f.padEnd(34)} → ${decision.padEnd(12)} ${how}`);
   if (!ok) {
@@ -54,5 +55,5 @@ for (const f of files) {
   }
 }
 console.log(`\n${pass}/${files.length} passed`);
-console.log(`tokens: prompt ${total.prompt}, completion ${total.completion} (reasoning ${total.reasoning}) over ${total.calls} model calls`);
+console.log(`tokens: prompt ${total.prompt}, completion ${total.completion} (reasoning ${total.reasoning}) over ${total.calls} model calls — $${total.usd.toFixed(6)}`);
 process.exit(pass === files.length ? 0 : 1);

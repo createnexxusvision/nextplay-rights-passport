@@ -15,7 +15,7 @@ const editorialRead = {
   confidence: 0.95,
 };
 const editorialTerms = { ...editorialRead.request, durationDays: 30 };
-const cfg = { baseUrl: "https://example.invalid/v1", model: "nemotron-test", apiKey: "k", timeoutMs: 1000, reasoning: "auto" as const };
+const cfg = { baseUrl: "https://example.invalid/v1", model: "nemotron-test", apiKey: "k", timeoutMs: 1000, reasoning: "auto" as const, routing: "auto" as const };
 function countingFetch(content: { request: Record<string, unknown>; confidence: number }) {
   const fake = fakeNebius({ readings: [content.request], confidence: content.confidence });
   return { f: fake.f, calls: { get n() { return fake.calls.length; } } };

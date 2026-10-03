@@ -18,7 +18,8 @@
     "dev:web": "npm run dev -w @nextplay/web",
     "build:web": "npm run build -w @nextplay/web",
     "eval": "npm run eval -w @nextplay/api",
-    "models": "npm run models -w @nextplay/api"
+    "models": "npm run models -w @nextplay/api",
+    "models:route": "npm run models:route -w @nextplay/api --"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

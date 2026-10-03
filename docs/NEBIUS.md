@@ -42,7 +42,17 @@ The policy is never sent to the model.
 | Agent loop | 8 | 2,600 | 738 (134) | 9/9 |
 | Agent loop, judgement cases 10–11 | 2 | 690 | 150 (5) | 2/2 |
 
-**Credit guard.** `AI_DAILY_TOKEN_BUDGET` (billed tokens per UTC day) and `AI_DAILY_CALL_LIMIT`. A call only starts if its worst case fits; otherwise the deep pass is skipped (the fast result stays cautious) or `/analyze` returns 503 and the form takes over. `npm run eval` is capped at `EVAL_TOKEN_CAP` (25,000) per run; `EVAL_ONLY=10,11` runs a subset. `AI_REASONING=off` turns reasoning off everywhere.
+**Model routing** (`agent/etc/models.json`, chosen by code before each call, zero tokens):
+
+| Work | Tier | Model | $/1M in / out | Cost per check (eval) |
+|---|---|---|---|---|
+| Routine reading (fast path) | light | Nemotron-3.5-Lightning | 0.06 / 0.24 | ~$0.000033 |
+| Judgement, brainstorming (deep path) | standard | Nemotron-3-Super-120B | 0.30 / 0.90 | ~$0.00024 |
+| Deep path with workload ≥ 4 | heavy | Nemotron-3-Ultra-550B | 1.00 / 3.00 | only if today's dollars allow |
+
+A failed or unsure call is retried one tier **up**, never down. Full eval with routing: 11/11 for **$0.0011**. `npm run models:route` benchmarks candidates cheapest-first on the matching eval cases and keeps the first model that gets all of them right (`-- --write` saves it; `ROUTE_USD_CAP`, default $0.05, caps the run). The 2026-10-03 run cost $0.003: Lightning passed 7/7 routine cases. For judgement, Lightning passed 2/4 (its reasoning ran past the output limit) and Nano passed 4/4; Super stays the standard tier until the judgement corpus is larger than 4 cases.
+
+**Credit guard.** `AI_DAILY_BUDGET_USD` (priced per tier), `AI_DAILY_TOKEN_BUDGET` (billed tokens per UTC day) and `AI_DAILY_CALL_LIMIT`. A heavy call that wouldn't fit today's dollars runs on the standard model instead. A call only starts if its worst case fits; otherwise the deep pass is skipped (the fast result stays cautious) or `/analyze` returns 503 and the form takes over. `npm run eval` is capped at `EVAL_TOKEN_CAP` (25,000) per run; `EVAL_ONLY=10,11` runs a subset. `AI_REASONING=off` turns reasoning off everywhere.
 
 Wiring notes:
 - Reasoning on/off per call via `chat_template_kwargs: { enable_thinking }`, with `reasoning_effort` bounding it (`/no_think` has no effect on Token Factory). `finish_reason: "length"` is reported as `truncated`.

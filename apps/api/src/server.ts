@@ -38,6 +38,8 @@ export interface ServerDeps {
   aiDailyCallLimit?: number;
   /** Global cap on billed model tokens per UTC day (Nebius credit ceiling). 0 or undefined = unlimited (dev only). */
   aiDailyTokenBudget?: number;
+  /** Global cap on model spend per UTC day in USD, priced per tier (agent/etc/models.json). 0 = unlimited. */
+  aiDailyBudgetUsd?: number;
   /** The agent's home (agent/). Default: loaded from the repo's agent/ directory. */
   agentHome?: AgentHome;
   /** Signs decision receipts (C2). Without it, no receipts are issued. */
@@ -65,7 +67,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   const agent: AgentContext = {
     home: deps.agentHome ?? loadAgentHome(),
     ai: deps.ai,
-    budget: new DailyBudget(deps.aiDailyCallLimit ?? 0, deps.aiDailyTokenBudget ?? 0, deps.now ?? (() => new Date())),
+    budget: new DailyBudget(deps.aiDailyCallLimit ?? 0, deps.aiDailyTokenBudget ?? 0, deps.aiDailyBudgetUsd ?? 0, deps.now ?? (() => new Date())),
     ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
   };
 
@@ -209,7 +211,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       };
     }
     const { evaluation, request } = out;
-    req.log.info({ agent: { path: out.trace.path, calls: out.trace.modelCalls, tokens: out.trace.tokens } }, "agent done");
+    req.log.info({ agent: { path: out.trace.path, calls: out.trace.calls.map((c) => `${c.phase}:${c.tier}`), tokens: out.trace.tokens, usd: out.trace.usd } }, "agent done");
     return {
       evaluation,
       decision: evaluation.decision,

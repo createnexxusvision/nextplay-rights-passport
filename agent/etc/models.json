@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "note": "Prices are USD per 1M tokens from Nebius /v1/models (2026-10-03). npm run models:route re-benchmarks and rewrites the tier models and prices.",
+  "tiers": {
+    "light": { "model": "nvidia/Nemotron-3_5-Lightning", "inputPerM": 0.06, "outputPerM": 0.24 },
+    "standard": { "model": "nvidia/nemotron-3-super-120b-a12b", "inputPerM": 0.3, "outputPerM": 0.9 },
+    "heavy": { "model": "nvidia/Nemotron-3-Ultra-550b-a55b", "inputPerM": 1.0, "outputPerM": 3.0 }
+  },
+  "routing": {
+    "classify": "light",
+    "plan": "standard",
+    "heavyAtWorkload": 4,
+    "heavyEnabled": true,
+    "escalateOnFailure": true
+  }
+}

@@ -7,14 +7,15 @@ export interface FakeReply {
   readings: Array<Record<string, unknown>>;
   confidence: number;
 }
-export function fakeNebius(reply: FakeReply | ((phase: "classify" | "plan", n: number) => FakeReply)) {
+/** Return null from a reply function to simulate an unusable (schema-failing) answer. */
+export function fakeNebius(reply: FakeReply | ((phase: "classify" | "plan", n: number) => FakeReply | null)) {
   const calls: Array<{ phase: "classify" | "plan"; body: Record<string, any> }> = [];
   const f = (async (_url: string, init: RequestInit) => {
     const body = JSON.parse(init.body as string);
     const phase = body.response_format.json_schema.schema.properties.readings ? "plan" : "classify";
     calls.push({ phase, body });
     const r = typeof reply === "function" ? reply(phase, calls.length) : reply;
-    const content = phase === "plan" ? { readings: r.readings, confidence: r.confidence } : { request: r.readings[0], confidence: r.confidence };
+    const content = r === null ? { nonsense: true } : phase === "plan" ? { readings: r.readings, confidence: r.confidence } : { request: r.readings[0], confidence: r.confidence };
     const reasoning = body.chat_template_kwargs.enable_thinking ? 300 : 0;
     return new Response(JSON.stringify({
       model: "nemotron-test",

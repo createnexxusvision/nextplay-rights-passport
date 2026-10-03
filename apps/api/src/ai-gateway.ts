@@ -12,7 +12,10 @@ import { Media, UseType } from "@nextplay/core";
  */
 export interface AIConfig {
   baseUrl: string;
+  /** Only used when routing is "off": one model for every phase. */
   model: string;
+  /** "auto" picks a model per call from agent/etc/models.json. "off" uses `model` everywhere. */
+  routing: "auto" | "off";
   apiKey: string;
   timeoutMs: number;
   /** "off" forces reasoning off in every phase (cost kill switch). "auto" uses agent/etc/agent.json. */
@@ -32,11 +35,14 @@ export type ModelCall =
 export const MAX_AI_TIMEOUT_MS = 25_000;
 
 export function loadAIConfig(env: NodeJS.ProcessEnv = process.env): AIConfig | null {
-  const { NEBIUS_BASE_URL, NEBIUS_MODEL, NEBIUS_API_KEY, AI_TIMEOUT_MS, AI_REASONING } = env;
-  if (!NEBIUS_BASE_URL || !NEBIUS_MODEL || !NEBIUS_API_KEY) return null;
+  const { NEBIUS_BASE_URL, NEBIUS_MODEL, NEBIUS_API_KEY, AI_TIMEOUT_MS, AI_REASONING, AI_MODEL_ROUTING } = env;
+  if (!NEBIUS_BASE_URL || !NEBIUS_API_KEY) return null;
+  const routing = AI_MODEL_ROUTING?.trim().toLowerCase() === "off" ? "off" : "auto";
+  if (routing === "off" && !NEBIUS_MODEL) throw new Error("AI_MODEL_ROUTING=off needs NEBIUS_MODEL");
   return {
     baseUrl: NEBIUS_BASE_URL.replace(/\/$/, ""),
-    model: NEBIUS_MODEL,
+    model: NEBIUS_MODEL ?? "",
+    routing,
     apiKey: NEBIUS_API_KEY,
     // Capped below the server's 30 s request timeout (S4) so a slow model can't hold sockets open.
     timeoutMs: Math.min(Math.max(Number(AI_TIMEOUT_MS ?? 20000) || 20000, 1000), MAX_AI_TIMEOUT_MS),
@@ -76,6 +82,8 @@ export const planJsonSchema = (maxReadings: number) =>
   }) as const;
 
 export interface PhaseRequest {
+  /** Model chosen by the router for this call. */
+  model: string;
   system: string;
   requestText: string;
   schema: object;
@@ -96,7 +104,7 @@ export async function callModel(cfg: AIConfig, req: PhaseRequest, fetchImpl: typ
       signal: controller.signal,
       headers: { "content-type": "application/json", authorization: `Bearer ${cfg.apiKey}` },
       body: JSON.stringify({
-        model: cfg.model,
+        model: req.model,
         temperature: 0,
         max_tokens: req.maxTokens,
         // Nemotron 3 on Token Factory: thinking on/off per call; effort bounds how long it thinks.
@@ -109,7 +117,7 @@ export async function callModel(cfg: AIConfig, req: PhaseRequest, fetchImpl: typ
         ],
       }),
     });
-    if (!res.ok) return { status: "error", reason: "http", model: cfg.model, latencyMs: elapsed(), usage: none };
+    if (!res.ok) return { status: "error", reason: "http", model: req.model, latencyMs: elapsed(), usage: none };
     const body = (await res.json()) as {
       model?: string;
       choices?: Array<{ finish_reason?: string; message?: { content?: string } }>;
@@ -121,16 +129,16 @@ export async function callModel(cfg: AIConfig, req: PhaseRequest, fetchImpl: typ
       reasoning: body.usage?.completion_tokens_details?.reasoning_tokens ?? 0,
     };
     // Only the final answer is read; reasoning text is ignored and never returned.
-    if (body.choices?.[0]?.finish_reason === "length") return { status: "error", reason: "truncated", model: cfg.model, latencyMs: elapsed(), usage };
+    if (body.choices?.[0]?.finish_reason === "length") return { status: "error", reason: "truncated", model: req.model, latencyMs: elapsed(), usage };
     try {
       const json = JSON.parse(stripFences(body.choices?.[0]?.message?.content ?? "")) as unknown;
-      return { status: "ok", json, model: body.model ?? cfg.model, latencyMs: elapsed(), usage };
+      return { status: "ok", json, model: body.model ?? req.model, latencyMs: elapsed(), usage };
     } catch {
-      return { status: "error", reason: "parse", model: cfg.model, latencyMs: elapsed(), usage };
+      return { status: "error", reason: "parse", model: req.model, latencyMs: elapsed(), usage };
     }
   } catch (err) {
     const timeout = err instanceof Error && err.name === "AbortError";
-    return { status: "error", reason: timeout ? "timeout" : "http", model: cfg.model, latencyMs: elapsed(), usage: none };
+    return { status: "error", reason: timeout ? "timeout" : "http", model: req.model, latencyMs: elapsed(), usage: none };
   } finally {
     clearTimeout(timer);
   }

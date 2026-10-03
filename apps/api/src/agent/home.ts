@@ -43,6 +43,33 @@ const Config = z
     phases: z.object({ classify: Phase, plan: Phase }).strict(),
   })
   .strict();
+export const TIERS = ["light", "standard", "heavy"] as const;
+export type Tier = (typeof TIERS)[number];
+const TierSpec = z
+  .object({
+    model: z.string().regex(/^[\w./-]{3,120}$/),
+    inputPerM: z.number().nonnegative().max(100),
+    outputPerM: z.number().nonnegative().max(100),
+  })
+  .strict();
+const Models = z
+  .object({
+    version: z.literal(1),
+    note: z.string().optional(),
+    tiers: z.object({ light: TierSpec, standard: TierSpec, heavy: TierSpec }).strict(),
+    routing: z
+      .object({
+        classify: z.enum(TIERS),
+        plan: z.enum(TIERS),
+        heavyAtWorkload: z.number().int().min(1).max(20),
+        heavyEnabled: z.boolean(),
+        escalateOnFailure: z.boolean(),
+      })
+      .strict(),
+  })
+  .strict();
+export type ModelsConfig = z.infer<typeof Models>;
+
 const Tool = z
   .object({
     name: Slug,
@@ -95,6 +122,7 @@ export interface FactTables {
 export interface AgentHome {
   root: string;
   config: z.infer<typeof Config>;
+  models: ModelsConfig;
   tools: Record<string, z.infer<typeof Tool>>;
   /** System prompt per model phase: skill + context files. */
   prompts: Record<ModelPhase, string>;
@@ -131,6 +159,8 @@ export function loadAgentHome(root: string = DEFAULT_AGENT_HOME): AgentHome {
     throw new Error(`agent home: etc/agent.json pipeline must be ${PIPELINE.join(" → ")}`);
   }
 
+  const models = json(base, "etc/models.json", Models);
+
   const tools: AgentHome["tools"] = {};
   for (const name of [...CODE_TOOLS, ...MODEL_PHASES]) {
     const tool = json(base, `bin/${name}.json`, Tool);
@@ -155,6 +185,7 @@ export function loadAgentHome(root: string = DEFAULT_AGENT_HOME): AgentHome {
   return {
     root: base,
     config,
+    models,
     tools,
     prompts,
     facts: {

@@ -10,7 +10,7 @@ import { buildServer } from "../src/server.js";
 import { fakeNebius } from "./fake-nebius.js";
 
 const home = loadAgentHome();
-const ai = { baseUrl: "https://example.invalid/v1", model: "nemotron-test", apiKey: "k", timeoutMs: 1000, reasoning: "auto" as const };
+const ai = { baseUrl: "https://example.invalid/v1", model: "nemotron-test", apiKey: "k", timeoutMs: 1000, reasoning: "auto" as const, routing: "auto" as const };
 const policy = RightsPolicy.parse({
   version: 1, territory: ["US"], media: ["social", "web", "advertising"], durationDays: 90, commercialUse: false,
   aiTraining: false, aiGeneration: false, likenessUse: false, sublicensing: false, attributionRequired: true,
@@ -169,5 +169,73 @@ describe("token budget (credit ceiling)", () => {
     b.spend(310);
     b.spend(610);
     expect(b.snapshot().tokens).toBe(920);
+  });
+});
+
+describe("model routing (agent/etc/models.json)", () => {
+  const tiers = home.models.tiers;
+  const HEAVY = "Our sponsor wants an AI-generated ad with the athlete's face and voice, then to share with partners for training their model. US, 60 days, $5,000.";
+
+  it("routine work goes to the light model, judgement to the standard model", async () => {
+    const fast = fakeNebius({ readings: [reading()], confidence: 0.95 });
+    await runAgent(ctx(fast.f), policy, CLEAR);
+    expect(fast.calls[0]!.body.model).toBe(tiers.light.model);
+    const deep = fakeNebius({ readings: [reading()], confidence: 0.95 });
+    await runAgent(ctx(deep.f), policy, JUDGEMENT);
+    expect(deep.calls[0]!.body.model).toBe(tiers.standard.model);
+  });
+
+  it("a heavy workload goes to the heavy model", async () => {
+    const fake = fakeNebius({ readings: [reading()], confidence: 0.95 });
+    const out = await runAgent(ctx(fake.f), policy, HEAVY);
+    expect(fake.calls[0]!.body.model).toBe(tiers.heavy.model);
+    expect(out.kind === "ok" && out.trace.workload).toBeGreaterThanOrEqual(home.models.routing.heavyAtWorkload);
+  });
+
+  it("heavy is refused when today's dollars can't cover it; standard does the work instead", async () => {
+    const fake = fakeNebius({ readings: [reading()], confidence: 0.95 });
+    // Standard worst case ≈ (600×0.30 + 1536×0.90)/1e6 ≈ $0.0016; heavy ≈ $0.0052.
+    await runAgent(ctx(fake.f, new DailyBudget(0, 0, 0.003)), policy, HEAVY);
+    expect(fake.calls[0]!.body.model).toBe(tiers.standard.model);
+  });
+
+  it("an unsure light answer is re-done by a bigger model, never the same one", async () => {
+    const fake = fakeNebius((phase) => ({ readings: [reading()], confidence: phase === "classify" ? 0.4 : 0.95 }));
+    const out = await runAgent(ctx(fake.f), policy, CLEAR);
+    expect(fake.calls.map((c) => c.body.model)).toEqual([tiers.light.model, tiers.standard.model]);
+    expect(out.kind === "ok" && out.trace.calls.map((c) => c.tier)).toEqual(["light", "standard"]);
+  });
+
+  it("an unusable light answer is retried one tier up instead of failing", async () => {
+    const fake = fakeNebius((phase) => (phase === "classify" ? null : { readings: [reading()], confidence: 0.95 }));
+    const out = await runAgent(ctx(fake.f), policy, CLEAR);
+    expect(fake.calls.map((c) => c.body.model)).toEqual([tiers.light.model, tiers.standard.model]);
+    expect(out).toMatchObject({ kind: "ok", evaluation: { decision: "ALLOWED" } });
+    if (out.kind === "ok") expect(out.trace.calls.map((c) => c.ok)).toEqual([false, true]);
+  });
+
+  it("records the real cost per call at each tier's price", async () => {
+    const fake = fakeNebius({ readings: [reading()], confidence: 0.95 });
+    const out = await runAgent(ctx(fake.f), policy, CLEAR);
+    // fake bills 250 prompt + 60 completion tokens
+    const expected = (250 * tiers.light.inputPerM + 60 * tiers.light.outputPerM) / 1e6;
+    expect(out.kind === "ok" && out.trace.usd).toBeCloseTo(expected, 12);
+  });
+
+  it("AI_MODEL_ROUTING=off sends every call to NEBIUS_MODEL", async () => {
+    const fake = fakeNebius({ readings: [reading()], confidence: 0.95 });
+    await runAgent({ ...ctx(fake.f), ai: { ...ai, routing: "off", model: "pinned/model" } }, policy, HEAVY);
+    expect(fake.calls.every((c) => c.body.model === "pinned/model")).toBe(true);
+  });
+
+  it("refuses an invalid models.json", () => {
+    const dir = mkdtempSync(join(tmpdir(), "agent-models-"));
+    cpSync(DEFAULT_AGENT_HOME, dir, { recursive: true });
+    const p = join(dir, "etc/models.json");
+    const m = JSON.parse(readFileSync(p, "utf8"));
+    m.routing.classify = "galaxy-brain";
+    writeFileSync(p, JSON.stringify(m));
+    expect(() => loadAgentHome(dir)).toThrow(/models.json/);
+    rmSync(dir, { recursive: true, force: true });
   });
 });
