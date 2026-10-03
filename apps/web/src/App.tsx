@@ -11,7 +11,7 @@ import {
   type CommitmentOpening,
   type SplitEntry,
 } from "@nextplay/core";
-import { analyze, evaluateStructured, health, type CheckResult } from "./api";
+import { analyze, evaluateStructured, health, UseFormError, type CheckResult } from "./api";
 import { Passport, type PassportAsset } from "./Passport";
 
 const ledger = new DemoLedger();
@@ -63,6 +63,18 @@ interface PolicyDraft {
 }
 
 const uid = () => crypto.randomUUID().slice(0, 8);
+
+function describeTerms(r: UseRequest): string[] {
+  const yesNo = (b: boolean) => (b ? "yes" : "no");
+  return [
+    `Use: ${r.useType.replace("_", " ")}`,
+    `Channels: ${r.media.length ? r.media.map((m) => MEDIA_LABEL[m]).join(", ") : "not stated"}`,
+    `Countries: ${r.territory.length ? r.territory.join(", ") : "not stated"}`,
+    `Length: ${r.durationDays !== undefined ? `${r.durationDays} days` : "not stated"}`,
+    `Fee: ${r.offeredFeeMinor !== undefined ? `${(r.offeredFeeMinor / 100).toFixed(2)} ${r.currency ?? ""}`.trim() : "not stated"}`,
+    `Commercial: ${yesNo(r.commercial)} · Likeness: ${yesNo(r.likeness)} · AI generation: ${yesNo(r.aiGeneration)} · AI training: ${yesNo(r.aiTraining)} · Sublicensing: ${yesNo(r.sublicensing)}`,
+  ];
+}
 
 function download(name: string, data: unknown) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -206,6 +218,23 @@ export function App() {
         if (!req.success) throw new Error("Check the request: countries must be 2-letter codes and days a whole number.");
         setResult(await evaluateStructured(current.policy, req.data));
       }
+    } catch (e) {
+      if (e instanceof UseFormError) setMode("form");
+      setCheckError(e instanceof Error ? e.message : "The check didn't finish.");
+    } finally {
+      setChecking(false);
+    }
+  }
+
+  // An AI-read ALLOWED is provisional: it only covers the terms the AI extracted.
+  // The requester confirms those exact terms and the engine re-checks them directly.
+  const pendingTerms = result?.confirmation?.required ? result.confirmation.terms : null;
+  async function confirmTerms() {
+    if (!current || !pendingTerms) return;
+    setChecking(true);
+    setCheckError(null);
+    try {
+      setResult(await evaluateStructured(current.policy, pendingTerms));
     } catch (e) {
       setCheckError(e instanceof Error ? e.message : "The check didn't finish.");
     } finally {
@@ -387,6 +416,19 @@ export function App() {
               </div>
             )}
             {checkError && <p className="error" role="alert">{checkError}</p>}
+            {pendingTerms && (
+              <div className="confirm" role="region" aria-label="Confirm these terms">
+                <h3>Confirm these terms</h3>
+                <p className="hint">The AI read the request as the terms below. The approval only covers these terms, not the wording of the request.</p>
+                <ul className="terms">
+                  {describeTerms(pendingTerms).map((t) => <li key={t}>{t}</li>)}
+                </ul>
+                <div className="actions">
+                  <button className="primary" disabled={checking} onClick={() => void confirmTerms()}>Confirm these terms</button>
+                  <button className="ghost" onClick={() => setMode("form")}>Edit in the form</button>
+                </div>
+              </div>
+            )}
             <div className="actions">
               <button className="primary" disabled={!current || checking} onClick={() => void runCheck()}>
                 {checking ? "Checking…" : "Check request"}

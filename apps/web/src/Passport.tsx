@@ -67,6 +67,9 @@ export function Passport({ asset, disclose, onDisclose, contributorCount, splits
                 {DECISION_TEXT[result.decision].stamp}
               </div>
               <p className="verdict-line">{DECISION_TEXT[result.decision].line}</p>
+              {result.confirmation?.required && (
+                <p className="warn">Provisional. Confirm the terms the AI read before relying on this.</p>
+              )}
               {reasons.length > 0 && (
                 <ul className="reasons">
                   {reasons.map((r) => <li key={r}>{REASON_TEXT[r as ReasonCode] ?? r}</li>)}

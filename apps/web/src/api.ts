@@ -16,11 +16,18 @@ export interface AIInfo {
 export interface CheckResult {
   decision: Evaluation["decision"];
   evaluation: Evaluation | null;
+  /** What the decision is bound to. Only "structured_terms" is final. */
+  basis?: "structured_terms" | "ai_extraction" | "injection_prescan";
   reviews?: string[];
   extractedRequest?: UseRequest;
+  /** Present on AI-derived ALLOWED: the requester must confirm these exact terms. */
+  confirmation?: { required: true; terms: UseRequest } | { required: false };
   ai: AIInfo;
   advisory?: string;
 }
+
+/** The AI path is out of budget or offline: the caller should switch to the form. */
+export class UseFormError extends Error {}
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   let res: Response;
@@ -34,6 +41,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     throw new Error("Can't reach the rights API. Start it with `npm run dev:api` and try again.");
   }
   if (res.status === 429) throw new Error("Too many checks in a minute. Wait a moment and try again.");
+  if (res.status === 503) throw new UseFormError("Automatic reading is paused for today. Fill in the details instead.");
   if (!res.ok) throw new Error(`The API rejected this request (${res.status}). Check the policy and request fields.`);
   return (await res.json()) as T;
 }
@@ -44,7 +52,7 @@ export function analyze(policy: RightsPolicy, requestText: string): Promise<Chec
 
 export async function evaluateStructured(policy: RightsPolicy, request: UseRequest): Promise<CheckResult> {
   const r = await post<{ evaluation: Evaluation; ai: AIInfo }>("/api/v1/rights/evaluate", { policy, request });
-  return { decision: r.evaluation.decision, evaluation: r.evaluation, ai: r.ai, extractedRequest: request };
+  return { decision: r.evaluation.decision, evaluation: r.evaluation, basis: "structured_terms", ai: r.ai, extractedRequest: request };
 }
 
 export async function health(): Promise<{ ai: "enabled" | "disabled" } | null> {

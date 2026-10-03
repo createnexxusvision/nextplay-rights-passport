@@ -24,7 +24,8 @@ export type ReasonCode =
   | "currency_mismatch"
   | "ai_low_confidence"
   | "ai_missing_information"
-  | "ai_unavailable";
+  | "ai_unavailable"
+  | "request_injection_suspected";
 
 export interface Evaluation {
   decision: Decision;

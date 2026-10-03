@@ -229,3 +229,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   .row input[aria-label="Contributor name"] { grid-column: 1 / -1; }
   .step { padding: 18px; }
 }
+
+/* S1: AI-read terms the requester must confirm */
+.confirm { margin: 16px 0 0; padding: 14px 16px; border: 1px solid var(--line); border-left: 4px solid var(--gold); border-radius: var(--radius-sm); background: var(--surface); }
+.confirm h3 { margin: 0 0 6px; font-size: 1rem; }
+.confirm .hint { margin-bottom: 10px; }
+.terms { margin: 0; padding-left: 18px; font-size: 0.925rem; }
+.terms li { margin: 2px 0; }

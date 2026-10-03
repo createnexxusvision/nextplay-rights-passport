@@ -5,7 +5,7 @@
  */
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { applyAIGate, evaluate, RightsPolicy } from "@nextplay/core";
+import { applyAIGate, evaluate, RightsPolicy, scanForInjection } from "@nextplay/core";
 import { extractUseRequest, loadAIConfig } from "./ai-gateway.js";
 
 const dir = join(import.meta.dirname, "../../../evals/rights-analysis");
@@ -19,9 +19,12 @@ const files = (await readdir(dir)).filter((f) => f.endsWith(".json"));
 for (const f of files) {
   const fx = JSON.parse(await readFile(join(dir, f), "utf8"));
   const policy = RightsPolicy.parse(fx.policy);
-  const ai = await extractUseRequest(cfg, { policy, requestText: fx.requestText });
+  // Same order as the API: the deterministic pre-scan runs before the model.
+  const ai = scanForInjection(fx.requestText).suspected
+    ? null
+    : await extractUseRequest(cfg, { policy, requestText: fx.requestText });
   const decision =
-    ai.status === "ok" ? applyAIGate(evaluate(policy, ai.extraction.request), ai.extraction).decision : "NEEDS_REVIEW";
+    ai?.status === "ok" ? applyAIGate(evaluate(policy, ai.extraction.request), ai.extraction).decision : "NEEDS_REVIEW";
   const ok = (fx.acceptable as string[]).includes(decision);
   if (ok) pass++;
   console.log(`${ok ? "PASS" : "FAIL"}  ${f}  → ${decision}  (expected ${fx.acceptable.join("|")})`);

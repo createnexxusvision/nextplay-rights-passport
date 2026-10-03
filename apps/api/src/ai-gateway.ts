@@ -23,6 +23,8 @@ export type AIResult =
   | { status: "disabled" }
   | { status: "error"; reason: "timeout" | "http" | "schema" | "parse"; model: string; latencyMs: number };
 
+export const MAX_AI_TIMEOUT_MS = 25_000;
+
 export function loadAIConfig(env: NodeJS.ProcessEnv = process.env): AIConfig | null {
   const { NEBIUS_BASE_URL, NEBIUS_MODEL, NEBIUS_API_KEY, AI_TIMEOUT_MS } = env;
   if (!NEBIUS_BASE_URL || !NEBIUS_MODEL || !NEBIUS_API_KEY) return null;
@@ -30,7 +32,8 @@ export function loadAIConfig(env: NodeJS.ProcessEnv = process.env): AIConfig | n
     baseUrl: NEBIUS_BASE_URL.replace(/\/$/, ""),
     model: NEBIUS_MODEL,
     apiKey: NEBIUS_API_KEY,
-    timeoutMs: Number(AI_TIMEOUT_MS ?? 20000),
+    // Capped below the server's 30 s request timeout (S4) so a slow model can't hold sockets open.
+    timeoutMs: Math.min(Math.max(Number(AI_TIMEOUT_MS ?? 20000) || 20000, 1000), MAX_AI_TIMEOUT_MS),
   };
 }
 
