@@ -23,3 +23,12 @@ Setup:
 2. Put `NEBIUS_API_KEY` in `.env`.
 3. Run `npm run models` and copy an exact Nemotron id into `NEBIUS_MODEL`.
 4. Run `npm run eval`.
+
+## Model choice (checked 2026-10-03)
+
+`npm run models` listed four Nemotron models: `NVIDIA-Nemotron-3-Nano-30B-A3B`, `Nemotron-3_5-Lightning`, `nemotron-3-super-120b-a12b` and `Nemotron-3-Ultra-550b-a55b`. We use **`nvidia/nemotron-3-super-120b-a12b`**. It passes the eval corpus 9/9 on three runs in a row, at about 6–8 s per request.
+
+Wiring notes:
+- **Reasoning tokens.** Nemotron 3 reasons before it answers, and those tokens count against `max_tokens`. With 1200, the JSON answer got cut off. The gateway now uses 4096 and reports `finish_reason: "length"` as `truncated`. Reasoning text is never read or returned.
+- **Structured output.** The request sends `response_format: json_schema` with the extraction schema. This stopped invented enum values (we saw `"aiGeneration"` instead of `"ai_generation"` about 1 time in 10). The strict zod parse is still the final check.
+- **Bursts.** 12 parallel calls caused some 20 s timeouts. Normal use is one call per check, and the API rate limit (20/min on `/analyze`) plus `AI_DAILY_CALL_LIMIT` keep it there.

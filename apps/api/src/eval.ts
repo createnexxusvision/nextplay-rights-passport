@@ -28,6 +28,17 @@ for (const f of files) {
   const ok = (fx.acceptable as string[]).includes(decision);
   if (ok) pass++;
   console.log(`${ok ? "PASS" : "FAIL"}  ${f}  → ${decision}  (expected ${fx.acceptable.join("|")})`);
+  if (!ok) {
+    // Show why, so a model error isn't mistaken for a real review.
+    if (ai === null) console.log("      injection pre-scan hit");
+    else if (ai.status !== "ok") console.log(`      AI ${ai.status}${"reason" in ai ? `: ${ai.reason}` : ""}`);
+    else {
+      const ev = applyAIGate(evaluate(policy, ai.extraction.request), ai.extraction);
+      console.log(`      denials ${JSON.stringify(ev.denials)} reviews ${JSON.stringify(ev.reviews)}`);
+      console.log(`      extracted ${JSON.stringify(ai.extraction.request)}`);
+      console.log(`      missing ${JSON.stringify(ai.extraction.missingInformation)}`);
+    }
+  }
 }
 console.log(`\n${pass}/${files.length} passed`);
 process.exit(pass === files.length ? 0 : 1);
