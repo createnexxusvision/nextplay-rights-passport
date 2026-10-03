@@ -27,6 +27,10 @@ A brand or AI agent asks *"can I use this asset for this purpose?"*. An NVIDIA N
 | Canonical JSON is locale-independent, so the same policy gives the same hash everywhere. | `packages/core/src/canonical.ts` |
 | Money is integer minor units and splits are basis points that sum to exactly 10000. | `schemas.ts`, `splits.ts` |
 | Demo mode can never emit a transaction id. | `ledger.ts` (enforced by the type) |
+| An AI-read approval only covers the terms the AI extracted, and the requester must confirm them. Text that tries to instruct the AI goes to a person. | `server.ts`, `injection.ts` |
+| Decisions come with an Ed25519-signed receipt. The passport shows "Signed" only after verifying it. | `receipts.ts`, `GET /api/v1/keys` |
+| The private copy of your terms is encrypted with your passphrase (PBKDF2 600k → AES-256-GCM). | `vault.ts` |
+| You can prove one policy field (say, "no AI training") without revealing the rest. | `merkle.ts` |
 
 ## Layout
 
@@ -36,7 +40,7 @@ apps/api             Fastify API + Nebius/Nemotron gateway + eval runner
 apps/web             Vite + React app: register → splits → policy seal → request check → passport
 contracts/           Midnight RightsRegistry spec (wallet/token work gated, see contracts/README.md)
 evals/               fixed rights-analysis corpus (allowed / denied / ambiguous / injection)
-docs/                decisions, hackathon checklist, security
+docs/                decisions, cryptography, hackathon checklist
 ```
 
 ## Run
@@ -44,11 +48,12 @@ docs/                decisions, hackathon checklist, security
 ```bash
 nvm use            # Node 22+
 npm install
-npm test           # 27 unit + API tests, no network needed
+npm test           # unit + API + crypto tests, no network needed
 npm run typecheck
 cp .env.example .env   # add Nebius credentials to enable the AI
 npm run dev:api        # http://localhost:8080/health
 npm run dev:web        # http://localhost:5173 (second terminal)
+npm run build:web      # static build + Cloudflare Pages _headers (CSP, HSTS)
 npm run models         # list Nemotron model ids your Nebius key can use
 npm run eval           # live Nemotron eval corpus (needs NEBIUS_*)
 ```
@@ -58,8 +63,11 @@ npm run eval           # live Nemotron eval corpus (needs NEBIUS_*)
 | Method | Path | AI | Purpose |
 |---|---|---|---|
 | GET | `/health` | n/a | Liveness and AI status |
-| POST | `/api/v1/rights/evaluate` | no | `{ policy, request }` → deterministic decision |
-| POST | `/api/v1/rights/analyze` | yes | `{ policy, requestText }` → Nemotron extraction → engine decision |
+| POST | `/api/v1/rights/evaluate` | no | `{ policy, request, policySeal? }` → deterministic decision (`basis: "structured_terms"`) + signed receipt |
+| POST | `/api/v1/rights/analyze` | yes | `{ policy, requestText, policySeal? }` → injection pre-scan → Nemotron extraction → engine decision. An ALLOWED here is provisional until the requester confirms the extracted terms through `evaluate`. |
+| GET | `/api/v1/keys` | n/a | Ed25519 public keys for verifying decision receipts |
+
+`policySeal` is `{ commitment, salt }`, the opening of the caller's policy seal. With it, the API binds its signed receipt to that seal. Server settings (`AI_DAILY_CALL_LIMIT`, `TRUST_PROXY`, `RECEIPT_SIGNING_KEY`) are documented in [`.env.example`](.env.example). See [`docs/CRYPTOGRAPHY.md`](docs/CRYPTOGRAPHY.md) for every scheme and its parameters.
 
 ## How Nebius and NVIDIA are used
 

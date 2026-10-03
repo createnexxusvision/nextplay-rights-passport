@@ -16,3 +16,5 @@ The private infrastructure repo holds the full ADR log; these are the ones that 
 - Why: Midnight SDK code is client-only, there is no SSR need, and it avoids the Next-on-Workers adapter.
 - It matches the earlier vault prototype's tooling, so components port over.
 - It replaces "Next.js" from the draft. *Revisit if you want Next.js.*
+
+**ADR-015: signed receipts, encrypted private copies, field-level disclosure.** The API signs each decision with Ed25519, and the passport verifies the signature before it shows "Signed". Private copies are encrypted with PBKDF2 (600k iterations) and AES-256-GCM. Policies can also be committed as a salted Merkle tree, so a single field can be proven on its own. Details are in [`CRYPTOGRAPHY.md`](CRYPTOGRAPHY.md).
