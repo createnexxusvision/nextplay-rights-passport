@@ -236,3 +236,7 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .confirm .hint { margin-bottom: 10px; }
 .terms { margin: 0; padding-left: 18px; font-size: 0.925rem; }
 .terms li { margin: 2px 0; }
+
+/* S6: encrypted private copy */
+.private-copy { margin-top: 12px; }
+.vault-form { display: grid; gap: 10px; margin-top: 12px; max-width: 420px; }

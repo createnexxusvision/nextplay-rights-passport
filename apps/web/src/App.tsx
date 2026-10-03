@@ -7,12 +7,12 @@ import {
   UseRequest,
   validateSplits,
   type AnchorResult,
-  type Commitment,
-  type CommitmentOpening,
   type SplitEntry,
 } from "@nextplay/core";
 import { analyze, evaluateStructured, health, UseFormError, type CheckResult } from "./api";
 import { Passport, type PassportAsset } from "./Passport";
+import { PrivateCopyPanel } from "./PrivateCopyPanel";
+import type { Sealed } from "./privateCopy";
 
 const ledger = new DemoLedger();
 
@@ -46,7 +46,6 @@ const EXAMPLES = [
 ];
 
 type Contributor = { id: string; name: string; role: (typeof ROLES)[number]; pct: string };
-type Sealed = { policy: RightsPolicy; commitment: Commitment; opening: CommitmentOpening; sealedAt: string };
 
 interface PolicyDraft {
   territory: string;
@@ -74,15 +73,6 @@ function describeTerms(r: UseRequest): string[] {
     `Fee: ${r.offeredFeeMinor !== undefined ? `${(r.offeredFeeMinor / 100).toFixed(2)} ${r.currency ?? ""}`.trim() : "not stated"}`,
     `Commercial: ${yesNo(r.commercial)} · Likeness: ${yesNo(r.likeness)} · AI generation: ${yesNo(r.aiGeneration)} · AI training: ${yesNo(r.aiTraining)} · Sublicensing: ${yesNo(r.sublicensing)}`,
   ];
-}
-
-function download(name: string, data: unknown) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(a.href);
 }
 
 export function App() {
@@ -363,15 +353,23 @@ export function App() {
             {policyError && <p className="error" role="alert">{policyError}</p>}
             <div className="actions">
               <button className="primary" onClick={() => void sealPolicy()}>{current ? `Seal as version ${current.policy.version + 1}` : "Seal policy"}</button>
-              {current && (
-                <button className="ghost" onClick={() => download(`policy-v${current.policy.version}-opening.json`, { ...current.commitment, ...current.opening, policy: current.policy })}>
-                  Save private copy
-                </button>
-              )}
             </div>
+            <PrivateCopyPanel
+              asset={asset}
+              sealed={sealed}
+              onImport={(data) => {
+                setSealed(data.sealed);
+                if (data.asset) {
+                  setAsset(data.asset);
+                  setTitle(data.asset.title);
+                }
+                setResult(null);
+                setAnchor(null);
+              }}
+            />
             {current && (
               <p className="note">
-                Version {current.policy.version} sealed. Keep the private copy: it's the only way to prove what this seal contains later.
+                Version {current.policy.version} sealed. Save an encrypted private copy: it's the only way to prove what this seal contains later, and it survives a page refresh.
               </p>
             )}
           </li>
