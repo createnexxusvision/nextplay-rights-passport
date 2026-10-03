@@ -8,3 +8,4 @@ export * from "./injection.js";
 export * from "./vault.js";
 export * from "./stream-hash.js";
 export * from "./receipts.js";
+export * from "./merkle.js";
