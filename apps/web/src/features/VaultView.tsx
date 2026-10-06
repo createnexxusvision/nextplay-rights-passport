@@ -2,7 +2,8 @@ import { useState } from "react";
 import { commit, contentHashStream, RightsPolicy } from "@nextplay/core";
 import { PrivateCopyPanel } from "../PrivateCopyPanel";
 import { shorten } from "../midnight/config";
-import { ASSET_TYPE_LABEL, ASSET_TYPES, currentSeal, MAX_TITLE, roleLabel, ROLES, uid, type AssetType, type Role, type VaultAsset } from "../vault";
+import type { ClaimBasis } from "@nextplay/core";
+import { ASSET_TYPE_LABEL, ASSET_TYPES, CLAIM_LABEL, CLAIM_SHORT, confirmedDaysAgo, currentSeal, MAX_TITLE, roleLabel, ROLES, STALE_DAYS, uid, type AssetType, type Role, type VaultAsset } from "../vault";
 
 export const MEDIA = ["social", "web", "advertising", "editorial", "broadcast", "print", "merchandise", "in_game"] as const;
 export const MEDIA_LABEL: Record<(typeof MEDIA)[number], string> = {
@@ -66,6 +67,7 @@ export function VaultView({ assets, selectedId, checksRun, onSelect, onAdd, onUp
               selected={a.id === selectedId}
               onSelect={() => onSelect(a.id)}
               onToggleLicensing={() => onUpdate(a.id, (x) => ({ ...x, licensing: x.licensing === "open" ? "paused" : "open" }))}
+              onReconfirm={() => onUpdate(a.id, (x) => ({ ...x, confirmedAt: new Date().toISOString() }))}
               onRevoke={() => {
                 if (window.confirm(`Revoke future licensing for "${a.title}"? Requests will no longer be checked against it.`)) {
                   onUpdate(a.id, (x) => ({ ...x, revoked: true, licensing: "paused" }));
@@ -77,7 +79,7 @@ export function VaultView({ assets, selectedId, checksRun, onSelect, onAdd, onUp
       )}
 
       {selected && !selected.revoked && (
-        <PolicyEditor key={selected.id} asset={selected} onSealed={(s) => onUpdate(selected.id, (x) => ({ ...x, sealed: [...x.sealed, s] }))} onGoToProof={onGoToProof} />
+        <PolicyEditor key={selected.id} asset={selected} onSealed={(s) => onUpdate(selected.id, (x) => ({ ...x, sealed: [...x.sealed, s], confirmedAt: s.sealedAt }))} onGoToProof={onGoToProof} />
       )}
 
       <section className="panel">
@@ -99,10 +101,12 @@ function Stat({ label, value, note }: { label: string; value: number; note?: str
   );
 }
 
-function AssetCard({ asset: a, selected, onSelect, onToggleLicensing, onRevoke }: {
-  asset: VaultAsset; selected: boolean; onSelect: () => void; onToggleLicensing: () => void; onRevoke: () => void;
+function AssetCard({ asset: a, selected, onSelect, onToggleLicensing, onRevoke, onReconfirm }: {
+  asset: VaultAsset; selected: boolean; onSelect: () => void; onToggleLicensing: () => void; onRevoke: () => void; onReconfirm: () => void;
 }) {
   const seal = currentSeal(a);
+  const days = confirmedDaysAgo(a);
+  const stale = days !== null && days > STALE_DAYS;
   const status = a.revoked ? "revoked" : seal ? "sealed" : "draft";
   return (
     <article className={`card${selected ? " card-selected" : ""}`}>
@@ -116,12 +120,15 @@ function AssetCard({ asset: a, selected, onSelect, onToggleLicensing, onRevoke }
       <dl className="card-facts">
         <div><dt>Licensing</dt><dd>{a.revoked ? "Revoked" : a.licensing === "open" ? "Open" : "Paused"}</dd></div>
         <div><dt>Contributors</dt><dd>{a.contributors.length}</dd></div>
+        <div><dt>Rights held</dt><dd>{seal ? CLAIM_SHORT[seal.policy.claimBasis ?? "original"] : "—"}</dd></div>
+        <div><dt>Last confirmed</dt><dd className={stale ? "warn" : undefined}>{days === null ? "—" : days === 0 ? "Today" : `${days} day${days === 1 ? "" : "s"} ago`}{stale ? " · stale" : ""}</dd></div>
         <div className="wide"><dt>Fingerprint</dt><dd><code>{a.contentHash ? shorten(a.contentHash, 12, 8) : "—"}</code></dd></div>
       </dl>
       {!a.revoked && (
         <div className="card-actions">
           <button className="ghost small" onClick={onSelect}>{seal ? "Edit policy" : "Set policy"}</button>
           <button className="ghost small" onClick={onToggleLicensing}>{a.licensing === "open" ? "Pause licensing" : "Open to licensing"}</button>
+          <button className="ghost small" title="Confirm these rights are still yours: no exclusive deal or assignment signed elsewhere" onClick={onReconfirm}>Reconfirm rights</button>
           <button className="ghost small danger" onClick={onRevoke}>Revoke future licensing</button>
         </div>
       )}
@@ -174,6 +181,7 @@ function RegisterForm({ onDone }: { onDone: (a: VaultAsset) => void }) {
       licensing: open ? "open" : "paused",
       revoked: false,
       disclose: { title: true, assetType: true, contributors: true },
+      confirmedAt: new Date().toISOString(),
     });
   }
 
@@ -215,19 +223,21 @@ function RegisterForm({ onDone }: { onDone: (a: VaultAsset) => void }) {
 interface PolicyDraft {
   territory: string; media: string[]; durationDays: string; commercialUse: boolean; aiTraining: boolean; aiGeneration: boolean;
   likenessUse: boolean; sublicensing: boolean; attributionRequired: boolean; minimumFee: string; currency: string;
+  claimBasis: ClaimBasis;
 }
 
 function draftFrom(a: VaultAsset): PolicyDraft {
   const p = currentSeal(a)?.policy;
   if (!p) {
     return { territory: "US", media: ["social", "web", "advertising"], durationDays: "90", commercialUse: true, aiTraining: false,
-      aiGeneration: false, likenessUse: false, sublicensing: false, attributionRequired: true, minimumFee: "1000", currency: "USD" };
+      aiGeneration: false, likenessUse: false, sublicensing: false, attributionRequired: true, minimumFee: "1000", currency: "USD", claimBasis: "original" };
   }
   return {
     territory: p.territory.join(", "), media: [...p.media], durationDays: p.durationDays ? String(p.durationDays) : "",
     commercialUse: p.commercialUse, aiTraining: p.aiTraining, aiGeneration: p.aiGeneration, likenessUse: p.likenessUse,
     sublicensing: p.sublicensing, attributionRequired: p.attributionRequired,
     minimumFee: p.minimumFeeMinor !== undefined ? String(p.minimumFeeMinor / 100) : "", currency: p.currency ?? "USD",
+    claimBasis: p.claimBasis ?? "original",
   };
 }
 
@@ -248,6 +258,8 @@ function PolicyEditor({ asset, onSealed, onGoToProof }: { asset: VaultAsset; onS
       likenessUse: draft.likenessUse, sublicensing: draft.sublicensing, attributionRequired: draft.attributionRequired,
       minimumFeeMinor: fee ? Math.round(Number(fee) * 100) : undefined,
       currency: fee ? draft.currency : undefined,
+      // "original" is the default and is left out, so it never changes the commitment of older policies.
+      claimBasis: draft.claimBasis === "original" ? undefined : draft.claimBasis,
     });
     if (!parsed.success) {
       return setError("Check the policy: countries must be 2-letter codes (or WORLD), pick at least one channel, and use whole numbers for days.");
@@ -261,6 +273,14 @@ function PolicyEditor({ asset, onSealed, onGoToProof }: { asset: VaultAsset; onS
     <section className="panel">
       <h3>Rights policy · {asset.title}</h3>
       <p className="hint">Sealing creates a new version. Earlier versions stay on record, so nothing is silently rewritten.</p>
+      <label className="claim">Your rights in this asset
+        <select value={draft.claimBasis} onChange={(e) => set("claimBasis", e.target.value as ClaimBasis)}>
+          {(Object.keys(CLAIM_LABEL) as ClaimBasis[]).map((c) => <option key={c} value={c}>{CLAIM_LABEL[c]}</option>)}
+        </select>
+      </label>
+      {draft.claimBasis !== "original" && (
+        <p className="note">You can only grant what you hold. Requests that match this policy will still go to review so the {draft.claimBasis === "likeness_only" ? "content owner (school, league or broadcaster)" : "upstream license"} can be checked.</p>
+      )}
       <div className="grid2">
         <label>Countries<input value={draft.territory} onChange={(e) => set("territory", e.target.value)} placeholder="US, CA or WORLD" /></label>
         <label>Longest use (days)<input inputMode="numeric" value={draft.durationDays} onChange={(e) => set("durationDays", e.target.value)} placeholder="Leave blank for no limit" /></label>

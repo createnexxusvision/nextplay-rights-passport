@@ -28,12 +28,15 @@ interface Props {
   onAnchor: () => void;
   /** Licensing state from the vault. */
   licensing?: "open" | "paused" | "revoked";
+  /** What the owner holds (rights layering) and when they last confirmed it. */
+  claim?: string | undefined;
+  confirmed?: { days: number; stale: boolean } | null | undefined;
 }
 
 const short = (h: string) => `${h.slice(0, 10)}…${h.slice(-6)}`;
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
-export function Passport({ asset, disclose, onDisclose, contributorCount, splitsOk, sealed, result, receiptVerified, anchor, onAnchor, licensing }: Props) {
+export function Passport({ asset, disclose, onDisclose, contributorCount, splitsOk, sealed, result, receiptVerified, anchor, onAnchor, licensing, claim, confirmed }: Props) {
   // Re-key the stamp on every new result so it lands again.
   const [stampKey, setStampKey] = useState(0);
   useEffect(() => {
@@ -65,6 +68,10 @@ export function Passport({ asset, disclose, onDisclose, contributorCount, splits
             <div><dt>Licensing</dt><dd className={licensing === "open" ? "ok" : "warn"}>{licensing === "open" ? "Open to requests" : licensing === "paused" ? "Paused" : "Revoked"}</dd></div>
           )}
           <div><dt>Fingerprint</dt><dd><code title={asset?.contentHash}>{asset?.contentHash ? short(asset.contentHash) : "—"}</code></dd></div>
+          {claim && <div><dt>Rights held</dt><dd>{claim}</dd></div>}
+          {confirmed && (
+            <div><dt>Last confirmed</dt><dd className={confirmed.stale ? "warn" : undefined}>{confirmed.days === 0 ? "Today" : `${confirmed.days} days ago`}{confirmed.stale ? " · may be out of date" : ""}</dd></div>
+          )}
           <div><dt>Policy seal</dt><dd><code title={sealed?.commitment.commitment}>{sealed ? short(sealed.commitment.commitment) : "—"}</code></dd></div>
         </dl>
 

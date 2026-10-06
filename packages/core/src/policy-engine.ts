@@ -26,7 +26,9 @@ export type ReasonCode =
   | "ai_missing_information"
   | "ai_unavailable"
   | "request_injection_suspected"
-  | "ai_readings_disagree";
+  | "ai_readings_disagree"
+  | "content_owner_consent_required"
+  | "upstream_license_check";
 
 export interface Evaluation {
   decision: Decision;
@@ -67,6 +69,11 @@ export function evaluate(policy: RightsPolicy, req: UseRequest): Evaluation {
     else if (req.currency !== policy.currency) reviews.push("currency_mismatch");
     else if (req.offeredFeeMinor < policy.minimumFeeMinor) denials.push("fee_below_minimum");
   }
+
+  // Rights layering: the owner can't grant more than they hold. A clean match against
+  // their policy is still only their part of the rights, so a person must check the rest.
+  if (policy.claimBasis === "likeness_only") reviews.push("content_owner_consent_required");
+  if (policy.claimBasis === "licensed") reviews.push("upstream_license_check");
 
   const obligations: Evaluation["obligations"] = policy.attributionRequired ? ["attribution_required"] : [];
   const decision: Decision = denials.length ? "DENIED" : reviews.length ? "NEEDS_REVIEW" : "ALLOWED";

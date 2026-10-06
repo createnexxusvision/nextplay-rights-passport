@@ -66,3 +66,24 @@ describe("private copy: fails at save time, not after a refresh", () => {
     await expect(exportPrivateCopy([{ ...a, contributors: many }], pass)).rejects.toThrow(/Can't save yet: contributors/);
   });
 });
+
+describe("rights layering and staleness survive the private copy", () => {
+  it("round-trips claim basis (sealed) and the last-confirmed date", async () => {
+    const { commit: c } = await import("@nextplay/core");
+    const nil = RightsPolicy.parse({ ...policy, claimBasis: "likeness_only" });
+    const seal = await c("rights-policy", nil);
+    const a = { ...(await assetFixture()), sealed: [{ policy: nil, commitment: seal.commitment, opening: seal.opening, sealedAt: "2026-10-05T00:00:00.000Z" }], confirmedAt: "2026-10-06T00:00:00.000Z" };
+    const [back] = await importPrivateCopy(JSON.stringify(await exportPrivateCopy([a], pass)), pass);
+    expect(back!.sealed[0]!.policy.claimBasis).toBe("likeness_only");
+    expect(back!.confirmedAt).toBe("2026-10-06T00:00:00.000Z");
+  });
+  it("flags a passport not reconfirmed in STALE_DAYS", async () => {
+    const { confirmedDaysAgo, STALE_DAYS } = await import("../src/vault");
+    const a = await assetFixture();
+    const now = Date.parse("2026-10-06T00:00:00.000Z");
+    expect(confirmedDaysAgo({ ...a, confirmedAt: "2026-10-01T00:00:00.000Z" }, now)).toBe(5);
+    expect(confirmedDaysAgo({ ...a, confirmedAt: "2026-01-01T00:00:00.000Z" }, now)!).toBeGreaterThan(STALE_DAYS);
+    // Without an explicit confirmation, the latest seal counts as one.
+    expect(confirmedDaysAgo({ ...a, confirmedAt: undefined }, now)).toBe(1);
+  });
+});
