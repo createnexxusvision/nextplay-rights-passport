@@ -19,12 +19,16 @@ export function contentSecurityPolicy(api: string | null, extraConnect: string[]
     "script-src 'self'",
     "style-src 'self'",
     "font-src 'self'",
-    "img-src 'self' data: blob:",
+    // Every image (logo, favicon) is a same-origin file; downloads use blob: navigation, not img.
+    "img-src 'self'",
     `connect-src ${connect}`,
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",
     "frame-ancestors 'none'",
+    // Trusted Types: DOM XSS sinks (innerHTML, script src strings) refuse plain strings.
+    "require-trusted-types-for 'script'",
+    "trusted-types 'none'",
     "upgrade-insecure-requests",
   ].join("; ");
 }

@@ -42,6 +42,11 @@ export interface VaultAsset {
 
 export const uid = () => crypto.randomUUID().slice(0, 8);
 
+/** Input limits, kept in sync with the private-copy schema so anything you can type can be restored. */
+export const MAX_TITLE = 200;
+export const MAX_NAME = 120;
+export const MAX_CONTRIBUTORS = 20;
+
 export function splitsOf(a: VaultAsset): SplitEntry[] {
   return a.contributors.map((c) => ({ contributorRef: c.id, role: c.role, bps: Math.round((Number.parseFloat(c.pct) || 0) * 100) }));
 }

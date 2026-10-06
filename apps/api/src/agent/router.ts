@@ -67,8 +67,10 @@ export function route(
   if (phase === "plan" && r.heavyEnabled && score >= r.heavyAtWorkload) tier = "heavy";
   // After a miss, never retry on the same or a smaller model.
   if (floor) tier = atLeast(tier, next(floor));
-  // Heavy only if today's dollars still allow it; otherwise drop to standard (never below).
-  if (tier === "heavy" && !budget.fitsUsd(costUsd(home, "heavy", promptAllowance, maxTokens))) tier = "standard";
+  // Heavy only if today's heavy cap and dollars still allow it; otherwise drop to standard (never below).
+  if (tier === "heavy" && (!budget.heavyAvailable(r.heavyMaxPerDay) || !budget.fitsUsd(costUsd(home, "heavy", promptAllowance, maxTokens)))) {
+    tier = "standard";
+  }
   const model = ai.routing === "off" ? ai.model : home.models.tiers[tier].model;
   return { tier, model, score, worstCaseUsd: costUsd(home, tier, promptAllowance, maxTokens) };
 }

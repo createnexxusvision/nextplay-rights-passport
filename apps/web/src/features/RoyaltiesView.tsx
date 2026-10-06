@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { allocate, canonicalize, commit, formatMinor, validateSplits } from "@nextplay/core";
 import { shorten } from "../midnight/config";
-import { currentSeal, roleLabel, ROLES, splitsOf, uid, type Contributor, type VaultAsset } from "../vault";
+import { currentSeal, MAX_CONTRIBUTORS, MAX_NAME, roleLabel, ROLES, splitsOf, uid, type Contributor, type VaultAsset } from "../vault";
 
 interface Props {
   assets: VaultAsset[];
@@ -63,18 +63,18 @@ export function RoyaltiesView({ assets, selectedId, onSelect, onUpdate, onGoToVa
           <div className="rows">
             {asset.contributors.map((c) => (
               <div className="row" key={c.id}>
-                <input aria-label="Contributor name" value={c.name} onChange={(e) => patch(c.id, { name: e.target.value })} placeholder="Name (private)" />
+                <input aria-label="Contributor name" maxLength={MAX_NAME} value={c.name} onChange={(e) => patch(c.id, { name: e.target.value })} placeholder="Name (private)" />
                 <select aria-label="Role" value={c.role} onChange={(e) => patch(c.id, { role: e.target.value as Contributor["role"] })}>
                   {ROLES.map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
                 </select>
-                <span className="pct"><input aria-label="Share in percent" inputMode="decimal" value={c.pct} onChange={(e) => patch(c.id, { pct: e.target.value })} />%</span>
+                <span className="pct"><input aria-label="Share in percent" inputMode="decimal" maxLength={6} value={c.pct} onChange={(e) => patch(c.id, { pct: e.target.value })} />%</span>
                 <button className="ghost" aria-label="Remove contributor" disabled={asset.contributors.length === 1}
                   onClick={() => onUpdate(asset.id, (a) => ({ ...a, contributors: a.contributors.filter((x) => x.id !== c.id) }))}>Remove</button>
               </div>
             ))}
           </div>
           <div className="row-foot">
-            <button className="ghost" onClick={() => onUpdate(asset.id, (a) => ({ ...a, contributors: [...a.contributors, { id: uid(), name: "", role: "filmer", pct: "0" }] }))}>Add contributor</button>
+            <button className="ghost" disabled={asset.contributors.length >= MAX_CONTRIBUTORS} onClick={() => onUpdate(asset.id, (a) => ({ ...a, contributors: [...a.contributors, { id: uid(), name: "", role: "filmer", pct: "0" }] }))}>Add contributor</button>
             <span className={splitsOk ? "ok" : "warn"}>{splitsOk ? "Splits add up to 100%" : `Splits add up to ${totalPct}%. They need to total 100%.`}</span>
           </div>
           <div className="actions">

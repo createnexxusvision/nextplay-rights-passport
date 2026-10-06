@@ -34,8 +34,22 @@ export function App() {
   const [assets, setAssets] = useState<VaultAsset[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checksRun, setChecksRun] = useState(0);
+  // Unsaved work: the vault is memory-only, so warn before a refresh or close throws it away.
+  const [dirty, setDirty] = useState(false);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
-  const update = (id: string, patch: (a: VaultAsset) => VaultAsset) => setAssets((xs) => xs.map((a) => (a.id === id ? patch(a) : a)));
+  const update = (id: string, patch: (a: VaultAsset) => VaultAsset) => {
+    setAssets((xs) => xs.map((a) => (a.id === id ? patch(a) : a)));
+    setDirty(true);
+  };
   const go = (t: Tab) => {
     setTab(t);
     document.getElementById("main")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -95,14 +109,18 @@ export function App() {
               selectedId={selectedId}
               checksRun={checksRun}
               onSelect={setSelectedId}
+              dirty={dirty}
+              onSaved={() => setDirty(false)}
               onAdd={(a) => {
                 setAssets((xs) => [...xs, a]);
                 setSelectedId(a.id);
+                setDirty(true);
               }}
               onUpdate={update}
               onImport={(restored) => {
                 setAssets(restored);
                 setSelectedId(restored[0]?.id ?? null);
+                setDirty(false);
               }}
               onGoToProof={() => setTab("proof")}
             />

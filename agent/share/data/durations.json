@@ -1,6 +1,27 @@
 {
-  "numberWords": { "a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12 },
-  "unitDays": { "day": 1, "week": 7, "month": 30, "year": 365 },
-  "perpetual": "\\b(?:perpetual(?:ly)?|in perpetuity|forever|indefinite(?:ly)?|no end date)\\b",
-  "maxDays": 36500
+  "numberWords": {
+    "a": 1,
+    "an": 1,
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "eleven": 11,
+    "twelve": 12
+  },
+  "unitDays": {
+    "day": 1,
+    "week": 7,
+    "month": 30,
+    "year": 365
+  },
+  "perpetual": "\\b(?:perpetual(?:ly)?|in perpetuity|forever|for life|lifetime|indefinite(?:ly)?|no end date|no expir(?:y|ation)|until further notice|without (?:an? )?end(?: date)?)\\b",
+  "maxDays": 36500,
+  "extension": "\\b(?:auto-?renew(?:s|al|ing|ed)?|renew(?:able|s|al|ed)?|extend(?:able|ed|s)?|extension|roll(?:s|ing)?[\\s-]?over|evergreen|option to (?:renew|extend))\\b"
 }

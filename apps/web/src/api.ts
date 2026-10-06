@@ -49,7 +49,11 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   } catch {
     throw new Error("Can't reach the rights API. Start it with `npm run dev:api` and try again.");
   }
-  if (res.status === 429) throw new Error("Too many checks in a minute. Wait a moment and try again.");
+  if (res.status === 429) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    if (body.error === "ai_client_quota_reached") throw new UseFormError("You've used today's automatic readings. Fill in the details instead.");
+    throw new Error("Too many checks in a minute. Wait a moment and try again.");
+  }
   if (res.status === 503) throw new UseFormError("Automatic reading is paused for today. Fill in the details instead.");
   if (!res.ok) throw new Error(`The API rejected this request (${res.status}). Check the policy and request fields.`);
   return (await res.json()) as T;

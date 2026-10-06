@@ -57,3 +57,12 @@ describe("private copy (S6), multi-asset v2", () => {
     expect(restored).toMatchObject({ title: "Old clip", contentHash: a.contentHash, sealed: a.sealed, licensing: "open", revoked: false });
   });
 });
+
+describe("private copy: fails at save time, not after a refresh", () => {
+  it("refuses to save a vault that couldn't be restored", async () => {
+    const a = await assetFixture();
+    await expect(exportPrivateCopy([{ ...a, title: "x".repeat(600) }], pass)).rejects.toThrow(/Can't save yet: title/);
+    const many = Array.from({ length: 21 }, (_, i) => ({ id: `c${i}`, name: "", role: "athlete" as const, pct: "1" }));
+    await expect(exportPrivateCopy([{ ...a, contributors: many }], pass)).rejects.toThrow(/Can't save yet: contributors/);
+  });
+});

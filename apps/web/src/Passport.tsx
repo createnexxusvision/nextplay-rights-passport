@@ -40,6 +40,7 @@ export function Passport({ asset, disclose, onDisclose, contributorCount, splits
     if (result) setStampKey((k) => k + 1);
   }, [result]);
 
+  const provisional = result?.confirmation?.required === true;
   const reasons: string[] = result
     ? [...(result.evaluation?.denials ?? []), ...(result.evaluation?.reviews ?? result.reviews ?? [])]
     : [];
@@ -70,18 +71,19 @@ export function Passport({ asset, disclose, onDisclose, contributorCount, splits
         <div className="verdict" aria-live="polite">
           {result ? (
             <>
-              <div key={stampKey} className={`stamp stamp-${result.decision.toLowerCase()}`}>
-                {DECISION_TEXT[result.decision].stamp}
+              {/* An AI-read ALLOWED is not an approval until the exact terms are confirmed: stamp it Pending. */}
+              <div key={stampKey} className={`stamp stamp-${provisional ? "needs_review" : result.decision.toLowerCase()}`}>
+                {provisional ? "Pending" : DECISION_TEXT[result.decision].stamp}
               </div>
-              <p className="verdict-line">{DECISION_TEXT[result.decision].line}</p>
+              <p className="verdict-line">
+                {provisional ? "This reading would be allowed. Confirm the exact terms to make it binding." : DECISION_TEXT[result.decision].line}
+              </p>
               {receiptVerified && result.receipt && (
                 <p className="signed" title={`Receipt ${result.receipt.receipt.receiptId}, key ${result.receipt.receipt.kid}`}>
                   Signed by NextPlay rights engine
                 </p>
               )}
-              {result.confirmation?.required && (
-                <p className="warn">Provisional. Confirm the terms the AI read before relying on this.</p>
-              )}
+
               {reasons.length > 0 && (
                 <ul className="reasons">
                   {reasons.map((r) => <li key={r}>{REASON_TEXT[r as ReasonCode] ?? r}</li>)}

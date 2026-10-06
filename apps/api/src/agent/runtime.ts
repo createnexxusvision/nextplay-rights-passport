@@ -14,7 +14,7 @@ import {
   type RightsPolicy,
 } from "@nextplay/core";
 import { callModel, CLASSIFY_JSON_SCHEMA, planJsonSchema, type AIConfig, type TokenUsage } from "../ai-gateway.js";
-import { PROMPT_ALLOWANCE, type DailyBudget } from "./budget.js";
+import { estimatePromptTokens, type DailyBudget } from "./budget.js";
 import { extractRequestFacts, mergeRequest } from "./facts.js";
 import type { AgentHome, ModelPhase, Tier } from "./home.js";
 import { costUsd, measureWorkload, route } from "./router.js";
@@ -111,10 +111,11 @@ export async function runAgent(ctx: AgentContext, policy: RightsPolicy, requestT
   while (trace.modelCalls < loop.maxIterations) {
     const p = phases[phase];
     // Route: the cheapest model tier that fits this work (code, zero tokens).
-    const r = route(home, ai, budget, phase, { ...load, priorMiss: floor !== null }, floor, p.maxTokens, PROMPT_ALLOWANCE);
+    const promptTokens = estimatePromptTokens(home.prompts[phase], requestText);
+    const r = route(home, ai, budget, phase, { ...load, priorMiss: floor !== null }, floor, p.maxTokens, promptTokens);
     trace.workload = r.score;
-    // Hard budget: no call starts unless its worst case still fits today's caps.
-    if (!budget.tryReserve(p.maxTokens, r.worstCaseUsd)) {
+    // Hard budget: no call starts unless its worst case (real prompt size + max output) fits today's caps.
+    if (!budget.tryReserve(p.maxTokens, r.worstCaseUsd, promptTokens, r.tier === "heavy")) {
       if (!best) return { kind: "budget" };
       trace.steps.push(`${phase}:skipped-budget`);
       break;

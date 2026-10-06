@@ -5,6 +5,9 @@ import type { VaultAsset } from "./vault";
 interface Props {
   assets: VaultAsset[];
   onImport: (assets: VaultAsset[]) => void;
+  /** Called after a successful encrypted save, so the vault can clear its "unsaved" state. */
+  onSaved?: () => void;
+  dirty?: boolean;
 }
 
 function downloadJson(name: string, data: unknown) {
@@ -17,7 +20,7 @@ function downloadJson(name: string, data: unknown) {
 }
 
 /** Save / import the passphrase-encrypted private copy (S6). */
-export function PrivateCopyPanel({ assets, onImport }: Props) {
+export function PrivateCopyPanel({ assets, onImport, onSaved, dirty }: Props) {
   const [mode, setMode] = useState<"closed" | "save" | "import">("closed");
   const [pass, setPass] = useState("");
   const [pass2, setPass2] = useState("");
@@ -40,6 +43,7 @@ export function PrivateCopyPanel({ assets, onImport }: Props) {
     try {
       const vault = await exportPrivateCopy(assets, pass);
       downloadJson(`nextplay-vault-${new Date().toISOString().slice(0, 10)}.npvault.json`, vault);
+      onSaved?.();
       reset("closed");
       setMsg({ kind: "ok", text: "Encrypted private copy saved. Without the passphrase nobody, including you, can open it." });
     } catch (e) {
@@ -54,6 +58,11 @@ export function PrivateCopyPanel({ assets, onImport }: Props) {
     setBusy(true);
     try {
       const restored = await importPrivateCopy(await file.text(), pass);
+      // Import replaces the vault in this tab: never do that silently.
+      if (assets.length > 0 && !window.confirm(`Replace the ${assets.length} asset${assets.length === 1 ? "" : "s"} in this tab with the ${restored.length} in this private copy?${dirty ? " Unsaved changes will be lost." : ""}`)) {
+        setBusy(false);
+        return;
+      }
       onImport(restored);
       reset("closed");
       const seals = restored.reduce((n, a) => n + a.sealed.length, 0);
@@ -67,6 +76,7 @@ export function PrivateCopyPanel({ assets, onImport }: Props) {
 
   return (
     <div className="private-copy">
+      {dirty && assets.length > 0 && <p className="warn">Unsaved changes. Save a private copy before you close or refresh this tab.</p>}
       <div className="actions">
         {assets.length > 0 && <button className="ghost" onClick={() => reset(mode === "save" ? "closed" : "save")}>Save private copy</button>}
         <button className="ghost" onClick={() => reset(mode === "import" ? "closed" : "import")}>Import private copy</button>

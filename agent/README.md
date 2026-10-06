@@ -56,7 +56,9 @@ the tiers with the cheapest model that passes (spend-capped; see the script).
 **Budgets** (`etc/agent.json` plus env): a per-phase `maxTokens`, at most
 `maxIterations` model calls per request, and global daily caps on calls
 (`AI_DAILY_CALL_LIMIT`), billed tokens (`AI_DAILY_TOKEN_BUDGET`) and dollars
-(`AI_DAILY_BUDGET_USD`, priced per model from `etc/models.json`). When a cap
+(`AI_DAILY_BUDGET_USD`, priced per model from `etc/models.json`), plus a
+per-client share (`AI_PER_CLIENT_DAILY_CALLS`). Budget is reserved against the
+real prompt size, not a flat allowance. When a cap
 is hit, the AI path switches off and the structured form still works.
 
 ## Rules that never change

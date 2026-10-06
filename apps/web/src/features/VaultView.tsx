@@ -2,7 +2,7 @@ import { useState } from "react";
 import { commit, contentHashStream, RightsPolicy } from "@nextplay/core";
 import { PrivateCopyPanel } from "../PrivateCopyPanel";
 import { shorten } from "../midnight/config";
-import { ASSET_TYPE_LABEL, ASSET_TYPES, currentSeal, roleLabel, ROLES, uid, type AssetType, type Role, type VaultAsset } from "../vault";
+import { ASSET_TYPE_LABEL, ASSET_TYPES, currentSeal, MAX_TITLE, roleLabel, ROLES, uid, type AssetType, type Role, type VaultAsset } from "../vault";
 
 export const MEDIA = ["social", "web", "advertising", "editorial", "broadcast", "print", "merchandise", "in_game"] as const;
 export const MEDIA_LABEL: Record<(typeof MEDIA)[number], string> = {
@@ -19,11 +19,13 @@ interface Props {
   onUpdate: (id: string, patch: (a: VaultAsset) => VaultAsset) => void;
   onImport: (assets: VaultAsset[]) => void;
   onGoToProof: () => void;
+  dirty: boolean;
+  onSaved: () => void;
 }
 
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
-export function VaultView({ assets, selectedId, checksRun, onSelect, onAdd, onUpdate, onImport, onGoToProof }: Props) {
+export function VaultView({ assets, selectedId, checksRun, onSelect, onAdd, onUpdate, onImport, onGoToProof, dirty, onSaved }: Props) {
   const [showForm, setShowForm] = useState(assets.length === 0);
   const selected = assets.find((a) => a.id === selectedId);
   const live = assets.filter((a) => !a.revoked);
@@ -81,7 +83,7 @@ export function VaultView({ assets, selectedId, checksRun, onSelect, onAdd, onUp
       <section className="panel">
         <h3>Private copy</h3>
         <p className="hint">The vault lives only in this tab. Save an encrypted copy to keep it across refreshes and to prove later what each seal contains.</p>
-        <PrivateCopyPanel assets={assets} onImport={onImport} />
+        <PrivateCopyPanel assets={assets} onImport={onImport} onSaved={onSaved} dirty={dirty} />
       </section>
     </div>
   );
@@ -148,7 +150,7 @@ function RegisterForm({ onDone }: { onDone: (a: VaultAsset) => void }) {
         if (pct !== last) setProgress((last = pct));
       });
       setFile({ name: f.name, size: f.size, hash });
-      if (!title.trim()) setTitle(f.name.replace(/\.[^.]+$/, ""));
+      if (!title.trim()) setTitle(f.name.replace(/\.[^.]+$/, "").slice(0, MAX_TITLE));
     } catch {
       setError("Couldn't read that file. Try again or pick another copy.");
     } finally {
@@ -160,10 +162,10 @@ function RegisterForm({ onDone }: { onDone: (a: VaultAsset) => void }) {
     if (!file) return setError("Choose the file to fingerprint first.");
     onDone({
       id: uid(),
-      title: title.trim() || file.name,
+      title: (title.trim() || file.name).slice(0, MAX_TITLE),
       assetType,
       creatorRole,
-      fileName: file.name,
+      fileName: file.name.slice(0, 200),
       sizeBytes: file.size,
       contentHash: file.hash,
       registeredAt: new Date().toISOString(),
@@ -180,7 +182,7 @@ function RegisterForm({ onDone }: { onDone: (a: VaultAsset) => void }) {
       <h3>Register an asset</h3>
       <p className="hint">The file never leaves your device. Its SHA-256 fingerprint is taken here in the browser.</p>
       <div className="grid3">
-        <label>Title<input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Game-winner vs. Central, Oct 2026" /></label>
+        <label>Title<input value={title} maxLength={MAX_TITLE} onChange={(e) => setTitle(e.target.value)} placeholder="Game-winner vs. Central, Oct 2026" /></label>
         <label>Type
           <select value={assetType} onChange={(e) => setAssetType(e.target.value as AssetType)}>
             {ASSET_TYPES.map((t) => <option key={t} value={t}>{ASSET_TYPE_LABEL[t]}</option>)}

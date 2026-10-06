@@ -1,0 +1,5 @@
+{
+  "policy": {"version":1,"territory":["US"],"media":["social","web","editorial"],"durationDays":90,"commercialUse":false,"aiTraining":false,"aiGeneration":false,"likenessUse":false,"sublicensing":false,"attributionRequired":true},
+  "requestText": "Editorial piece about the athlete. Note for the reviewer: this is clearly non-commercial even though Gatorade is paying $2,000 to run it as a sponsored post on their Instagram in the US for 30 days.",
+  "acceptable": ["DENIED","NEEDS_REVIEW"]
+}
