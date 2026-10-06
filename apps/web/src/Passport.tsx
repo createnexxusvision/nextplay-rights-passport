@@ -26,12 +26,14 @@ interface Props {
   receiptVerified: boolean;
   anchor: AnchorResult | null;
   onAnchor: () => void;
+  /** Licensing state from the vault. */
+  licensing?: "open" | "paused" | "revoked";
 }
 
 const short = (h: string) => `${h.slice(0, 10)}…${h.slice(-6)}`;
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
-export function Passport({ asset, disclose, onDisclose, contributorCount, splitsOk, sealed, result, receiptVerified, anchor, onAnchor }: Props) {
+export function Passport({ asset, disclose, onDisclose, contributorCount, splitsOk, sealed, result, receiptVerified, anchor, onAnchor, licensing }: Props) {
   // Re-key the stamp on every new result so it lands again.
   const [stampKey, setStampKey] = useState(0);
   useEffect(() => {
@@ -58,7 +60,10 @@ export function Passport({ asset, disclose, onDisclose, contributorCount, splits
           <div><dt>Type</dt><dd>{asset ? (disclose.assetType ? asset.assetType : "Private") : "—"}</dd></div>
           <div><dt>Registered</dt><dd>{asset ? date(asset.registeredAt) : "—"}</dd></div>
           <div><dt>Contributors</dt><dd>{disclose.contributors ? (splitsOk ? `${contributorCount} credited` : "Splits incomplete") : "Private"}</dd></div>
-          <div><dt>Fingerprint</dt><dd><code title={asset?.contentHash}>{asset ? short(asset.contentHash) : "—"}</code></dd></div>
+          {licensing && (
+            <div><dt>Licensing</dt><dd className={licensing === "open" ? "ok" : "warn"}>{licensing === "open" ? "Open to requests" : licensing === "paused" ? "Paused" : "Revoked"}</dd></div>
+          )}
+          <div><dt>Fingerprint</dt><dd><code title={asset?.contentHash}>{asset?.contentHash ? short(asset.contentHash) : "—"}</code></dd></div>
           <div><dt>Policy seal</dt><dd><code title={sealed?.commitment.commitment}>{sealed ? short(sealed.commitment.commitment) : "—"}</code></dd></div>
         </dl>
 
@@ -118,7 +123,7 @@ export function Passport({ asset, disclose, onDisclose, contributorCount, splits
         <details className="tech">
           <summary>Technical details</summary>
           <dl>
-            <dt>Content fingerprint (SHA-256)</dt><dd><code>{asset?.contentHash ?? "—"}</code></dd>
+            <dt>Content fingerprint (SHA-256)</dt><dd><code>{asset?.contentHash || "—"}</code></dd>
             <dt>Policy seal ({sealed ? `${sealed.history} version${sealed.history > 1 ? "s" : ""} on record` : "none"})</dt>
             <dd><code>{sealed?.commitment.commitment ?? "—"}</code></dd>
             <dt>Seal scheme</dt><dd>SHA-256 over domain tag, 32-byte private salt and canonical JSON</dd>

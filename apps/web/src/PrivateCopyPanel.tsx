@@ -1,11 +1,10 @@
 import { useState } from "react";
-import { exportPrivateCopy, importPrivateCopy, MIN_PASSPHRASE, type Sealed } from "./privateCopy";
-import type { PassportAsset } from "./Passport";
+import { exportPrivateCopy, importPrivateCopy, MIN_PASSPHRASE } from "./privateCopy";
+import type { VaultAsset } from "./vault";
 
 interface Props {
-  asset: PassportAsset | null;
-  sealed: Sealed[];
-  onImport: (data: { asset: PassportAsset | null; sealed: Sealed[] }) => void;
+  assets: VaultAsset[];
+  onImport: (assets: VaultAsset[]) => void;
 }
 
 function downloadJson(name: string, data: unknown) {
@@ -18,7 +17,7 @@ function downloadJson(name: string, data: unknown) {
 }
 
 /** Save / import the passphrase-encrypted private copy (S6). */
-export function PrivateCopyPanel({ asset, sealed, onImport }: Props) {
+export function PrivateCopyPanel({ assets, onImport }: Props) {
   const [mode, setMode] = useState<"closed" | "save" | "import">("closed");
   const [pass, setPass] = useState("");
   const [pass2, setPass2] = useState("");
@@ -39,8 +38,8 @@ export function PrivateCopyPanel({ asset, sealed, onImport }: Props) {
     if (pass !== pass2) return setMsg({ kind: "error", text: "The passphrases don't match." });
     setBusy(true);
     try {
-      const vault = await exportPrivateCopy(asset, sealed, pass);
-      downloadJson(`nextplay-private-copy-v${sealed.at(-1)!.policy.version}.npvault.json`, vault);
+      const vault = await exportPrivateCopy(assets, pass);
+      downloadJson(`nextplay-vault-${new Date().toISOString().slice(0, 10)}.npvault.json`, vault);
       reset("closed");
       setMsg({ kind: "ok", text: "Encrypted private copy saved. Without the passphrase nobody, including you, can open it." });
     } catch (e) {
@@ -54,10 +53,11 @@ export function PrivateCopyPanel({ asset, sealed, onImport }: Props) {
     if (!file) return setMsg({ kind: "error", text: "Choose a private copy file." });
     setBusy(true);
     try {
-      const data = await importPrivateCopy(await file.text(), pass);
-      onImport(data);
+      const restored = await importPrivateCopy(await file.text(), pass);
+      onImport(restored);
       reset("closed");
-      setMsg({ kind: "ok", text: `Restored ${data.sealed.length} sealed version${data.sealed.length > 1 ? "s" : ""}. Every seal was re-checked against its terms.` });
+      const seals = restored.reduce((n, a) => n + a.sealed.length, 0);
+      setMsg({ kind: "ok", text: `Restored ${restored.length} asset${restored.length === 1 ? "" : "s"} and ${seals} sealed policy version${seals === 1 ? "" : "s"}. Every seal was re-checked against its terms.` });
     } catch (e) {
       setMsg({ kind: "error", text: e instanceof Error ? e.message : "Couldn't open the private copy." });
     } finally {
@@ -68,12 +68,12 @@ export function PrivateCopyPanel({ asset, sealed, onImport }: Props) {
   return (
     <div className="private-copy">
       <div className="actions">
-        {sealed.length > 0 && <button className="ghost" onClick={() => reset(mode === "save" ? "closed" : "save")}>Save private copy</button>}
+        {assets.length > 0 && <button className="ghost" onClick={() => reset(mode === "save" ? "closed" : "save")}>Save private copy</button>}
         <button className="ghost" onClick={() => reset(mode === "import" ? "closed" : "import")}>Import private copy</button>
       </div>
       {mode === "save" && (
         <div className="vault-form">
-          <p className="hint">The copy holds your private terms and the salts that open each seal. It's encrypted with this passphrase (AES-256-GCM). There is no recovery if you lose it.</p>
+          <p className="hint">The copy holds every asset, your private terms, contributor names and the salts that open each seal. It's encrypted with this passphrase (AES-256-GCM). There is no recovery if you lose it.</p>
           <label>Passphrase<input type="password" autoComplete="new-password" minLength={MIN_PASSPHRASE} value={pass} onChange={(e) => setPass(e.target.value)} /></label>
           <label>Repeat passphrase<input type="password" autoComplete="new-password" value={pass2} onChange={(e) => setPass2(e.target.value)} /></label>
           <button className="primary" disabled={busy} onClick={() => void save()}>{busy ? "Encrypting…" : "Encrypt and save"}</button>
