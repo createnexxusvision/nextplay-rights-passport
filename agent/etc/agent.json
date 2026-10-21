@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "pipeline": ["prescan", "facts", "triage", "think", "repair", "evaluate", "verify", "explain"],
+  "loop": {
+    "maxIterations": 2,
+    "minConfidence": 0.8,
+    "escalateOnRepair": true
+  },
+  "phases": {
+    "classify": { "skill": "classify", "context": ["field-rules"], "reasoning": "off", "maxTokens": 256 },
+    "plan": { "skill": "plan", "context": ["field-rules"], "reasoning": "low", "maxTokens": 1536, "maxReadings": 3 }
+  }
+}

@@ -1,0 +1,1 @@
+{ "name": "facts", "kind": "code", "summary": "Reads fee, currency, duration, channels, countries and credit from the text. Two different fees or durations are a conflict that forces human review.", "reads": ["share/data/money.json", "share/data/durations.json", "share/data/channels.json", "share/data/countries.json", "share/data/credit.json"], "tokens": 0 }

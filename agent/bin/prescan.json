@@ -1,0 +1,1 @@
+{ "name": "prescan", "kind": "code", "summary": "Deterministic prompt-injection tripwire. A hit sends the request to a person and the model is never called.", "reads": [], "tokens": 0 }

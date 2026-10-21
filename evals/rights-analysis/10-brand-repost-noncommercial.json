@@ -1,0 +1,5 @@
+{
+  "policy": {"version":1,"territory":["US"],"media":["social","web"],"durationDays":90,"commercialUse":false,"aiTraining":false,"aiGeneration":false,"likenessUse":false,"sublicensing":false,"attributionRequired":true},
+  "requestText": "Nike would like to repost the clip on its Instagram in the US for 30 days, crediting the athlete.",
+  "acceptable": ["DENIED","NEEDS_REVIEW"]
+}

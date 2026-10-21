@@ -7,14 +7,14 @@ Target: **Nebius × NVIDIA hackathon, Best Apps and Agents track.** Check the of
 - [x] README explaining the Nebius/NVIDIA usage
 - [x] Uses an NVIDIA open model (Nemotron) via Nebius Token Factory (gateway code done)
 - [ ] Live Nemotron run passes `npm run eval` (needs Nebius credentials)
-- [ ] Working demo UI (`apps/web`)
+- [x] Working demo UI (`apps/web`): full flow verified in Chromium against a stand-in model server
 - [ ] Public YouTube demo under 3 minutes
 - [ ] Devpost submission copy
 
 ## Milestones
 1. ✅ **Foundation:** core package, API, AI gateway, tests, CI, secret scanning
 2. ⏳ **AI live:** set the Nebius model, tune the prompt, eval corpus green
-3. ⏳ **Web:** register asset (local SHA-256) → policy editor → request → decision → Proof Passport (demo-labelled)
+3. ✅ **Web:** register asset (local SHA-256) → policy editor → request → decision → Proof Passport (demo-labelled)
 4. ⏳ **Saturday, Midnight:** RightsRegistry contract, Preview deploy, real anchoring (see `contracts/README.md`)
 5. ⏳ **Submission:** video, Devpost copy
 

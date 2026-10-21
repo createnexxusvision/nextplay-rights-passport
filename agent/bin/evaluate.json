@@ -1,0 +1,1 @@
+{ "name": "evaluate", "kind": "code", "summary": "The deterministic policy engine decides every reading. The only component that decides.", "reads": [], "tokens": 0 }

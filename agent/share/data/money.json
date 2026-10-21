@@ -1,0 +1,6 @@
+{
+  "note": "Two-decimal currencies only, so minor units are always x100.",
+  "codes": ["USD", "GBP", "EUR", "CAD", "AUD", "CHF", "NZD", "MXN", "BRL", "INR"],
+  "symbols": { "$": "USD", "£": "GBP", "€": "EUR" },
+  "thousandSuffixes": ["k", "thousand"]
+}

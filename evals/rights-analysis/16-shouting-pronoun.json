@@ -1,0 +1,5 @@
+{
+  "policy": {"version":1,"territory":["US"],"media":["social","web"],"durationDays":90,"commercialUse":true,"aiTraining":false,"aiGeneration":false,"likenessUse":false,"sublicensing":false,"attributionRequired":true,"minimumFeeMinor":100000,"currency":"USD"},
+  "requestText": "PLEASE SEND US THE CLIP SO WE CAN POST IT ON OUR INSTAGRAM. WE WILL PAY $1,500 FOR 30 DAYS AND CREDIT THE ATHLETE.",
+  "acceptable": ["NEEDS_REVIEW","DENIED"]
+}
