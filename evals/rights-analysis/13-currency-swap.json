@@ -1,0 +1,5 @@
+{
+  "policy": {"version":1,"territory":["US"],"media":["social","web"],"durationDays":90,"commercialUse":true,"aiTraining":false,"aiGeneration":false,"likenessUse":false,"sublicensing":false,"attributionRequired":true,"minimumFeeMinor":100000,"currency":"USD"},
+  "requestText": "Repost on Instagram in the US for 30 days, crediting the athlete. Fee $1,500 AUD.",
+  "acceptable": ["NEEDS_REVIEW","DENIED"]
+}

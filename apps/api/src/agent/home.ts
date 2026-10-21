@@ -63,6 +63,8 @@ const Models = z
         plan: z.enum(TIERS),
         heavyAtWorkload: z.number().int().min(1).max(20),
         heavyEnabled: z.boolean(),
+        /** Hard cap on heavy-tier calls per UTC day, so keyword stuffing can't drain credit on the priciest model. */
+        heavyMaxPerDay: z.number().int().min(0).max(10_000),
         escalateOnFailure: z.boolean(),
       })
       .strict(),
@@ -94,6 +96,8 @@ const Durations = z
     numberWords: z.record(z.string().regex(/^[a-z]+$/), z.number().int().positive()),
     unitDays: z.record(z.string().regex(/^[a-z]+$/), z.number().int().positive()),
     perpetual: Pattern,
+    /** Renewal / extension wording: the real length may exceed the stated one. */
+    extension: Pattern,
     maxDays: z.number().int().positive().max(36500),
   })
   .strict();
@@ -113,9 +117,13 @@ export interface FactTables {
   numberWords: Record<string, number>;
   unitDays: Record<string, number>;
   perpetual: RegExp;
+  extension: RegExp;
   maxDays: number;
   channels: Array<[Media, RegExp]>;
+  /** Country names, case-insensitive. */
   countries: Array<[string, RegExp]>;
+  /** Short codes (US, UK), case-sensitive; skipped for mostly-capitals text. */
+  countryCodes: Array<[string, RegExp]>;
   credit: RegExp;
 }
 
@@ -193,13 +201,12 @@ export function loadAgentHome(root: string = DEFAULT_AGENT_HOME): AgentHome {
       numberWords: durations.numberWords,
       unitDays: durations.unitDays,
       perpetual: regex(durations.perpetual, "i", "durations.json"),
+      extension: regex(durations.extension, "i", "durations.json extension"),
       maxDays: durations.maxDays,
       channels: (Object.entries(channels.channels) as Array<[Media, string]>).map(([m, src]) => [m, regex(src, "i", `channels.json ${m}`)]),
-      countries: [
-        ...Object.entries(countries.names).map(([c, src]): [string, RegExp] => [c, regex(src, "i", `countries.json ${c}`)]),
-        // Codes are case-sensitive on purpose (see the note in countries.json).
-        ...Object.entries(countries.codes).map(([c, src]): [string, RegExp] => [c, regex(src, "", `countries.json ${c}`)]),
-      ],
+      countries: Object.entries(countries.names).map(([c, src]): [string, RegExp] => [c, regex(src, "i", `countries.json ${c}`)]),
+      // Codes are case-sensitive on purpose (see the note in countries.json).
+      countryCodes: Object.entries(countries.codes).map(([c, src]): [string, RegExp] => [c, regex(src, "", `countries.json ${c}`)]),
       credit: regex(credit.offered, "i", "credit.json"),
     },
     triage: triage.deepIf.map((src, i) => regex(src, "i", `triage.json #${i}`)),

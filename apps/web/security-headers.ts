@@ -12,27 +12,37 @@ export function apiOrigin(apiBaseUrl: string | undefined): string | null {
   return u.origin;
 }
 
-export function contentSecurityPolicy(api: string | null): string {
+export function contentSecurityPolicy(api: string | null, extraConnect: string[] = []): string {
+  const connect = ["'self'", ...(api ? [api] : []), ...extraConnect].join(" ");
   return [
     "default-src 'self'",
     "script-src 'self'",
     "style-src 'self'",
     "font-src 'self'",
-    "img-src 'self' data: blob:",
-    `connect-src 'self'${api ? ` ${api}` : ""}`,
+    // Every image (logo, favicon) is a same-origin file; downloads use blob: navigation, not img.
+    "img-src 'self'",
+    `connect-src ${connect}`,
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",
     "frame-ancestors 'none'",
+    // Trusted Types: DOM XSS sinks (innerHTML, script src strings) refuse plain strings.
+    "require-trusted-types-for 'script'",
+    "trusted-types 'none'",
     "upgrade-insecure-requests",
   ].join("; ");
 }
 
-export function pagesHeaders(apiBaseUrl: string | undefined): string {
+/** Extra origins the browser may call: Midnight proof server and indexer, only when configured. */
+export function midnightOrigins(urls: Array<string | undefined>): string[] {
+  return urls.filter((u): u is string => Boolean(u)).map((u) => apiOrigin(u)!).filter(Boolean);
+}
+
+export function pagesHeaders(apiBaseUrl: string | undefined, extraConnect: string[] = []): string {
   const api = apiOrigin(apiBaseUrl);
   return [
     "/*",
-    `  Content-Security-Policy: ${contentSecurityPolicy(api)}`,
+    `  Content-Security-Policy: ${contentSecurityPolicy(api, extraConnect)}`,
     "  Strict-Transport-Security: max-age=63072000; includeSubDomains",
     "  Referrer-Policy: no-referrer",
     "  X-Content-Type-Options: nosniff",
