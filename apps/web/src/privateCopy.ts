@@ -45,6 +45,7 @@ const Asset = z
     licensing: z.enum(["open", "paused"]),
     revoked: z.boolean(),
     disclose: Disclose,
+    confirmedAt: z.string().datetime().optional(),
   })
   .strict();
 const CopyV2 = z.object({ kind: z.literal("nextplay-private-copy"), v: z.literal(2), assets: z.array(Asset).max(200) }).strict();
