@@ -16,3 +16,9 @@ The private infrastructure repo holds the full ADR log; these are the ones that 
 - Why: Midnight SDK code is client-only, there is no SSR need, and it avoids the Next-on-Workers adapter.
 - It matches the earlier vault prototype's tooling, so components port over.
 - It replaces "Next.js" from the draft. *Revisit if you want Next.js.*
+
+**ADR-015: signed receipts, encrypted private copies, field-level disclosure.** The API signs each decision with Ed25519, and the passport verifies the signature before it shows "Signed". Private copies are encrypted with PBKDF2 (600k iterations) and AES-256-GCM. Policies can also be committed as a salted Merkle tree, so a single field can be proven on its own. Details are in [`CRYPTOGRAPHY.md`](CRYPTOGRAPHY.md).
+
+**ADR-016: the rights agent is a fixed loop with a Unix-style home.** `agent/` holds config (`etc/`), tool manifests (`bin/`), one prompt per phase (`skills/`), and data and context (`share/`). The runtime validates it at startup. The loop is fixed: prescan, facts, triage, classify or plan, repair, evaluate, verify, explain. It always answers at the end, and the model never calls tools. Reasoning is spent only where judgement is needed: the `plan` phase, on the deep path. Hard daily token and call budgets protect the credit.
+
+**ADR-017: route each task to the cheapest model that does it well.** `agent/etc/models.json` defines three tiers: light (routine classification), standard (judgement and planning) and heavy (workload score ≥ 4, only when the dollar budget allows). A code router picks the tier. A failed or unsure call moves up a tier, never down. `npm run models:route` re-benchmarks the tiers against the eval corpus under a spend cap.

@@ -72,3 +72,31 @@ describe("policy engine", () => {
     expect(() => RightsPolicy.parse({ ...policy, currency: undefined })).toThrow();
   });
 });
+
+describe("rights layering (claim basis)", async () => {
+  const { evaluate } = await import("../src/policy-engine.js");
+  const { RightsPolicy, UseRequest } = await import("../src/schemas.js");
+  const base = { version: 1, territory: ["US"], media: ["social"], commercialUse: true, aiTraining: false, aiGeneration: false,
+    likenessUse: true, sublicensing: false, attributionRequired: false };
+  const req = UseRequest.parse({ useType: "social", media: ["social"], territory: ["US"], commercial: true, aiTraining: false,
+    aiGeneration: false, likeness: true, sublicensing: false });
+  it("original (or absent) content: a matching request is allowed", () => {
+    expect(evaluate(RightsPolicy.parse(base), req).decision).toBe("ALLOWED");
+    expect(evaluate(RightsPolicy.parse({ ...base, claimBasis: "original" }), req).decision).toBe("ALLOWED");
+  });
+  it("likeness only: the content owner must also agree", () => {
+    const ev = evaluate(RightsPolicy.parse({ ...base, claimBasis: "likeness_only" }), req);
+    expect(ev).toMatchObject({ decision: "NEEDS_REVIEW", reviews: ["content_owner_consent_required"] });
+  });
+  it("licensed in: the upstream license must be checked", () => {
+    expect(evaluate(RightsPolicy.parse({ ...base, claimBasis: "licensed" }), req).reviews).toEqual(["upstream_license_check"]);
+  });
+  it("a denial still wins over a review", () => {
+    const ev = evaluate(RightsPolicy.parse({ ...base, claimBasis: "likeness_only", likenessUse: false }), req);
+    expect(ev.decision).toBe("DENIED");
+  });
+  it("leaves commitments of older policies unchanged when absent", async () => {
+    const { canonicalize } = await import("../src/canonical.js");
+    expect(canonicalize(RightsPolicy.parse(base))).not.toContain("claimBasis");
+  });
+});

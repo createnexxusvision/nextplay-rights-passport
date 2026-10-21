@@ -1,0 +1,1 @@
+{ "name": "triage", "kind": "code", "summary": "Chooses the fast path (classify, no reasoning) or the deep path (plan, reasoning on) from judgement keywords and conflicts.", "reads": ["share/data/triage.json"], "tokens": 0 }

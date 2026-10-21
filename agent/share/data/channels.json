@@ -1,0 +1,13 @@
+{
+  "note": "Case-insensitive. A channel matches when its pattern appears anywhere in the text.",
+  "channels": {
+    "social": "\\b(?:social(?:\\s+media)?|instagram|insta|tiktok|facebook|twitter|threads|snapchat|youtube|reels?)\\b",
+    "web": "\\b(?:website|web\\s*site|web|online|blog|landing\\s+page)\\b",
+    "advertising": "\\b(?:ads?|advert(?:isement|ising)?s?|billboards?|sponsored|commercials)\\b",
+    "broadcast": "\\b(?:tv|television|broadcast|streaming\\s+service|radio)\\b",
+    "print": "\\b(?:print|magazine|newspaper|posters?|flyers?|brochures?)\\b",
+    "merchandise": "\\b(?:merch(?:andise)?|t-?shirts?|jerseys?|apparel|hoodies?|mugs?)\\b",
+    "editorial": "\\b(?:editorial|news\\s+(?:story|article|coverage)|journalism)\\b",
+    "in_game": "\\b(?:in-?game|video\\s+games?|esports?)\\b"
+  }
+}

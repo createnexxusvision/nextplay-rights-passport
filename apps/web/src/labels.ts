@@ -24,6 +24,10 @@ export const REASON_TEXT: Record<ReasonCode, string> = {
   ai_low_confidence: "The AI wasn't confident it read the request correctly.",
   ai_missing_information: "The AI flagged details the request leaves out.",
   ai_unavailable: "Automatic reading is off, so a person has to read this request.",
+  content_owner_consent_required: "Someone else owns this content (for example the school, league or broadcaster). This policy covers only the athlete's name, image and likeness, so the content owner must also agree.",
+  upstream_license_check: "The owner holds this asset under a license from someone else. Check that license allows this use before granting it.",
+  ai_readings_disagree: "The request can reasonably be read more than one way, and the readings lead to different decisions.",
+  request_injection_suspected: "The request text tries to give the AI instructions, so a person has to read it.",
 };
 
 export const OBLIGATION_TEXT = { attribution_required: "Credit the athlete wherever this runs." } as const;

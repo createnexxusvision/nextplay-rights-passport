@@ -1,0 +1,1 @@
+{ "name": "verify", "kind": "code", "summary": "Fast path unsure or repaired: loop back to plan if iterations remain. Readings with different decisions: human review.", "reads": ["etc/agent.json loop"], "tokens": 0 }

@@ -22,20 +22,28 @@ interface Props {
   splitsOk: boolean;
   sealed: { version: number; commitment: Commitment; history: number } | null;
   result: CheckResult | null;
+  /** True only after the receipt signature verified against the published keys. */
+  receiptVerified: boolean;
   anchor: AnchorResult | null;
   onAnchor: () => void;
+  /** Licensing state from the vault. */
+  licensing?: "open" | "paused" | "revoked";
+  /** What the owner holds (rights layering) and when they last confirmed it. */
+  claim?: string | undefined;
+  confirmed?: { days: number; stale: boolean } | null | undefined;
 }
 
 const short = (h: string) => `${h.slice(0, 10)}…${h.slice(-6)}`;
 const date = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 
-export function Passport({ asset, disclose, onDisclose, contributorCount, splitsOk, sealed, result, anchor, onAnchor }: Props) {
+export function Passport({ asset, disclose, onDisclose, contributorCount, splitsOk, sealed, result, receiptVerified, anchor, onAnchor, licensing, claim, confirmed }: Props) {
   // Re-key the stamp on every new result so it lands again.
   const [stampKey, setStampKey] = useState(0);
   useEffect(() => {
     if (result) setStampKey((k) => k + 1);
   }, [result]);
 
+  const provisional = result?.confirmation?.required === true;
   const reasons: string[] = result
     ? [...(result.evaluation?.denials ?? []), ...(result.evaluation?.reviews ?? result.reviews ?? [])]
     : [];
@@ -56,17 +64,33 @@ export function Passport({ asset, disclose, onDisclose, contributorCount, splits
           <div><dt>Type</dt><dd>{asset ? (disclose.assetType ? asset.assetType : "Private") : "—"}</dd></div>
           <div><dt>Registered</dt><dd>{asset ? date(asset.registeredAt) : "—"}</dd></div>
           <div><dt>Contributors</dt><dd>{disclose.contributors ? (splitsOk ? `${contributorCount} credited` : "Splits incomplete") : "Private"}</dd></div>
-          <div><dt>Fingerprint</dt><dd><code title={asset?.contentHash}>{asset ? short(asset.contentHash) : "—"}</code></dd></div>
+          {licensing && (
+            <div><dt>Licensing</dt><dd className={licensing === "open" ? "ok" : "warn"}>{licensing === "open" ? "Open to requests" : licensing === "paused" ? "Paused" : "Revoked"}</dd></div>
+          )}
+          <div><dt>Fingerprint</dt><dd><code title={asset?.contentHash}>{asset?.contentHash ? short(asset.contentHash) : "—"}</code></dd></div>
+          {claim && <div><dt>Rights held</dt><dd>{claim}</dd></div>}
+          {confirmed && (
+            <div><dt>Last confirmed</dt><dd className={confirmed.stale ? "warn" : undefined}>{confirmed.days === 0 ? "Today" : `${confirmed.days} days ago`}{confirmed.stale ? " · may be out of date" : ""}</dd></div>
+          )}
           <div><dt>Policy seal</dt><dd><code title={sealed?.commitment.commitment}>{sealed ? short(sealed.commitment.commitment) : "—"}</code></dd></div>
         </dl>
 
         <div className="verdict" aria-live="polite">
           {result ? (
             <>
-              <div key={stampKey} className={`stamp stamp-${result.decision.toLowerCase()}`}>
-                {DECISION_TEXT[result.decision].stamp}
+              {/* An AI-read ALLOWED is not an approval until the exact terms are confirmed: stamp it Pending. */}
+              <div key={stampKey} className={`stamp stamp-${provisional ? "needs_review" : result.decision.toLowerCase()}`}>
+                {provisional ? "Pending" : DECISION_TEXT[result.decision].stamp}
               </div>
-              <p className="verdict-line">{DECISION_TEXT[result.decision].line}</p>
+              <p className="verdict-line">
+                {provisional ? "This reading would be allowed. Confirm the exact terms to make it binding." : DECISION_TEXT[result.decision].line}
+              </p>
+              {receiptVerified && result.receipt && (
+                <p className="signed" title={`Receipt ${result.receipt.receipt.receiptId}, key ${result.receipt.receipt.kid}`}>
+                  Signed by NextPlay rights engine
+                </p>
+              )}
+
               {reasons.length > 0 && (
                 <ul className="reasons">
                   {reasons.map((r) => <li key={r}>{REASON_TEXT[r as ReasonCode] ?? r}</li>)}
@@ -77,7 +101,7 @@ export function Passport({ asset, disclose, onDisclose, contributorCount, splits
               {result.ai.status === "ok" && result.ai.explanation && (
                 <blockquote className="ai-read">
                   <p>{result.ai.explanation}</p>
-                  <footer>How Nemotron read the request. Advisory only.</footer>
+                  <footer>How the request was read: terms from Nemotron and the text. Advisory only.</footer>
                 </blockquote>
               )}
             </>
@@ -108,11 +132,17 @@ export function Passport({ asset, disclose, onDisclose, contributorCount, splits
         <details className="tech">
           <summary>Technical details</summary>
           <dl>
-            <dt>Content fingerprint (SHA-256)</dt><dd><code>{asset?.contentHash ?? "—"}</code></dd>
+            <dt>Content fingerprint (SHA-256)</dt><dd><code>{asset?.contentHash || "—"}</code></dd>
             <dt>Policy seal ({sealed ? `${sealed.history} version${sealed.history > 1 ? "s" : ""} on record` : "none"})</dt>
             <dd><code>{sealed?.commitment.commitment ?? "—"}</code></dd>
             <dt>Seal scheme</dt><dd>SHA-256 over domain tag, 32-byte private salt and canonical JSON</dd>
             <dt>Decision engine</dt><dd>{result?.evaluation?.engineVersion ?? "—"}</dd>
+            <dt>Decision receipt</dt>
+            <dd>
+              {!result?.receipt ? "—" : receiptVerified
+                ? <>Ed25519, key <code>{result.receipt.receipt.kid}</code>, verified</>
+                : "Not verified"}
+            </dd>
             <dt>AI</dt>
             <dd>
               {!result ? "—" : result.ai.status === "ok"
