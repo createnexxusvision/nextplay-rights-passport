@@ -15,7 +15,7 @@ import {
   type ReceiptSigner,
 } from "@nextplay/core";
 import type { AIConfig } from "./ai-gateway.js";
-import { DailyBudget } from "./agent/budget.js";
+import { ClientQuota, DailyBudget } from "./agent/budget.js";
 import { loadAgentHome, type AgentHome } from "./agent/home.js";
 import { runAgent, type AgentContext } from "./agent/runtime.js";
 import { clientKey, peerAllowed, type TrustProxyMode } from "./proxy.js";
@@ -40,6 +40,8 @@ export interface ServerDeps {
   aiDailyTokenBudget?: number;
   /** Global cap on model spend per UTC day in USD, priced per tier (agent/etc/models.json). 0 = unlimited. */
   aiDailyBudgetUsd?: number;
+  /** Per-client cap on /analyze requests per UTC day, so one client can't drain the shared budget. 0 = unlimited. */
+  aiPerClientDailyCalls?: number;
   /** The agent's home (agent/). Default: loaded from the repo's agent/ directory. */
   agentHome?: AgentHome;
   /** Signs decision receipts (C2). Without it, no receipts are issued. */
@@ -70,6 +72,8 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     budget: new DailyBudget(deps.aiDailyCallLimit ?? 0, deps.aiDailyTokenBudget ?? 0, deps.aiDailyBudgetUsd ?? 0, deps.now ?? (() => new Date())),
     ...(deps.fetchImpl ? { fetchImpl: deps.fetchImpl } : {}),
   };
+
+  const clientQuota = new ClientQuota(deps.aiPerClientDailyCalls ?? 0, deps.now ?? (() => new Date()));
 
   const app = Fastify({
     bodyLimit: 64 * 1024,
@@ -169,6 +173,19 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     const { policy, requestText, policySeal } = parsed.data;
     if (policySeal && !(await sealMatches(policy, policySeal))) return reply.code(400).send({ error: "policy_seal_mismatch" });
 
+    // Per-client share of the AI budget. Over it, the structured form still works.
+    if (deps.ai && !clientQuota.tryTake(clientKey(trustProxy, req.raw.socket.remoteAddress, req.headers))) {
+      return reply.code(429).send({
+        error: "ai_client_quota_reached",
+        decision: "NEEDS_REVIEW",
+        reviews: ["ai_unavailable"],
+        ai: { status: "error", reason: "quota" },
+        fallback: "structured_form",
+        humanReviewRequired: true,
+        advisory: "You've used today's automatic readings. Fill in the details instead.",
+      });
+    }
+
     // The agent loop: prescan → facts → triage → classify|plan → repair → evaluate → verify → explain.
     const out = await runAgent(agent, policy, requestText);
 
@@ -234,7 +251,9 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       // How the agent got there: path, loop steps, readings, tokens. Never contains request text.
       agent: out.trace,
       humanReviewRequired: evaluation.decision !== "ALLOWED",
-      ...(await issueReceipt(policySeal, evaluation, request, "ai_extraction", out.model)),
+      // A provisional ALLOWED is never signed: a signed "allowed" from AI-read prose is exactly the
+      // artifact a bad actor would screenshot. The receipt comes from /evaluate once the terms are confirmed.
+      ...(evaluation.decision === "ALLOWED" ? {} : await issueReceipt(policySeal, evaluation, request, "ai_extraction", out.model)),
       advisory: "AI output is advisory. The decision comes from the deterministic policy engine, not the model, and covers only the extracted terms shown.",
     };
   });

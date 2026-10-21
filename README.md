@@ -70,6 +70,18 @@ npm run eval           # live Nemotron eval corpus (needs NEBIUS_*)
 
 `policySeal` is `{ commitment, salt }`, the opening of the caller's policy seal. With it, the API binds its signed receipt to that seal. Server settings (`AI_DAILY_CALL_LIMIT`, `TRUST_PROXY`, `RECEIPT_SIGNING_KEY`) are documented in [`.env.example`](.env.example). See [`docs/CRYPTOGRAPHY.md`](docs/CRYPTOGRAPHY.md) for every scheme and its parameters.
 
+## Why Midnight, not just a database
+
+The fair objection to any blockchain rights registry: a chain proves a record wasn't changed after it was written, not that the person who wrote it owned the rights. It also can't see a deal signed somewhere else. We agree, so the passport never claims ownership. What we use Midnight for is narrower and harder to do with a database:
+
+- **Prove a term without revealing the deal.** Policies are committed field by field (`packages/core/src/merkle.ts`). On Midnight, zero-knowledge proofs let an athlete prove "no AI training" or "fee ≥ X" to a brand or an AI company without exposing the fee, the other terms, or who they are. A public ledger can't do this, and a private database asks everyone to trust its operator.
+- **No single registry to trust.** Athletes, schools, collectives, brands and AI companies don't share an operator they all trust. An owner-anchored policy on a neutral chain is what lets a signed decision receipt mean "checked against *the owner's current* policy", not just against whatever policy the caller sent.
+- **AI training rights are the use case.** Billions of clips, derivative works and machine-readable permissions, checked by AI agents before they train or generate. That's where shared, private, verifiable permissions matter most, and it's what the Nemotron agent here already checks.
+
+What the chain doesn't do, and what the app handles instead:
+- **Ownership claims.** Each policy records what the owner actually holds: the content outright, a license, or only their name, image and likeness while a school, league or broadcaster owns the footage. Anything short of full ownership sends matching requests to review.
+- **Staleness.** Rights can be assigned off-chain, so passports show when the owner last confirmed them and flag stale ones.
+
 ## How Nebius and NVIDIA are used
 
 The `analyze` endpoint calls an NVIDIA Nemotron model served by **Nebius Token Factory** through its OpenAI-compatible chat-completions API (`NEBIUS_BASE_URL`, `NEBIUS_MODEL`). The model converts free-text use requests into a strict `UseRequest` schema and writes a reviewer-facing explanation. Every response records the model id and latency. [`docs/NEBIUS.md`](docs/NEBIUS.md) explains why this uses Token Factory rather than AI Cloud.

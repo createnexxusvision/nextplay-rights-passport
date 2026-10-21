@@ -10,7 +10,7 @@ import {
   verifyOpening,
   type VaultFile,
 } from "@nextplay/core";
-import { ASSET_TYPES, ROLES, uid, type Sealed, type SplitSeal, type VaultAsset } from "./vault";
+import { ASSET_TYPES, MAX_CONTRIBUTORS, ROLES, uid, type Sealed, type SplitSeal, type VaultAsset } from "./vault";
 
 /**
  * The private copy (S6): every asset in the vault with its sealed policy
@@ -39,12 +39,13 @@ const Asset = z
     sizeBytes: z.number().int().nonnegative(),
     contentHash: z.union([Hex, z.literal("")]),
     registeredAt: z.string().datetime(),
-    contributors: z.array(z.object({ id: z.string().min(1).max(64), name: z.string().max(200), role: z.enum(ROLES), pct: z.string().max(12) }).strict()).max(50),
+    contributors: z.array(z.object({ id: z.string().min(1).max(64), name: z.string().max(200), role: z.enum(ROLES), pct: z.string().max(12) }).strict()).max(MAX_CONTRIBUTORS),
     sealed: z.array(SealedPolicy).max(1000),
     splitSeal: SealedSplit.optional(),
     licensing: z.enum(["open", "paused"]),
     revoked: z.boolean(),
     disclose: Disclose,
+    confirmedAt: z.string().datetime().optional(),
   })
   .strict();
 const CopyV2 = z.object({ kind: z.literal("nextplay-private-copy"), v: z.literal(2), assets: z.array(Asset).max(200) }).strict();
@@ -80,7 +81,14 @@ async function checkSplit(s: z.infer<typeof SealedSplit>): Promise<SplitSeal> {
 
 export async function exportPrivateCopy(assets: VaultAsset[], passphrase: string): Promise<VaultFile> {
   if (passphrase.length < MIN_PASSPHRASE) throw new VaultError(`Use a passphrase of at least ${MIN_PASSPHRASE} characters.`);
-  return sealVault({ kind: "nextplay-private-copy", v: 2, assets }, passphrase);
+  // Validate with the same schema import uses, so a copy that couldn't be restored fails NOW, not after a refresh.
+  const payload = { kind: "nextplay-private-copy", v: 2, assets };
+  const check = CopyV2.safeParse(payload);
+  if (!check.success) {
+    const issue = check.error.issues[0];
+    throw new VaultError(`Can't save yet: ${issue?.path.slice(2).join(" ") || "the vault"} is invalid (${issue?.message ?? "unknown"}).`);
+  }
+  return sealVault(payload, passphrase);
 }
 
 /** Decrypts, validates, and re-verifies every seal against its opening before trusting it. */

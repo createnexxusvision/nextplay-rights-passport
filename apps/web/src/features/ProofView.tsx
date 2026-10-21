@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { DemoLedger, UseRequest, validateSplits, verifyReceipt, type AnchorResult } from "@nextplay/core";
 import { analyze, evaluateStructured, receiptKeys, UseFormError, type CheckResult } from "../api";
 import { Passport } from "../Passport";
-import { ASSET_TYPE_LABEL, currentSeal, splitsOf, type Disclose, type Sealed, type VaultAsset } from "../vault";
+import { ASSET_TYPE_LABEL, CLAIM_SHORT, confirmedDaysAgo, currentSeal, splitsOf, STALE_DAYS, type Disclose, type Sealed, type VaultAsset } from "../vault";
 import { MEDIA, MEDIA_LABEL } from "./VaultView";
 
 // Demo ledger until a Midnight contract is deployed: it can never return a txId (ADR-010).
@@ -185,6 +185,9 @@ export function ProofView({ assets, selectedId, onSelect, onDisclose, onChecked,
           <div className="actions">
             <button className="primary" disabled={Boolean(blocked) || checking} onClick={runCheck}>{checking ? "Checking…" : "Check request"}</button>
             {blocked && <span className="warn">{blocked}</span>}
+            {!blocked && (confirmedDaysAgo(asset) ?? 0) > STALE_DAYS && (
+              <span className="warn">Rights last confirmed over {STALE_DAYS} days ago. Reconfirm in Rights Vault if nothing was assigned elsewhere.</span>
+            )}
           </div>
         </section>
 
@@ -199,6 +202,11 @@ export function ProofView({ assets, selectedId, onSelect, onDisclose, onChecked,
           receiptVerified={receiptOk}
           anchor={anchor}
           licensing={asset.revoked ? "revoked" : asset.licensing}
+          claim={current ? CLAIM_SHORT[current.policy.claimBasis ?? "original"] : undefined}
+          confirmed={(() => {
+            const d = confirmedDaysAgo(asset);
+            return d === null ? null : { days: d, stale: d > STALE_DAYS };
+          })()}
           onAnchor={() => {
             if (!current || !asset.contentHash) return;
             void ledger

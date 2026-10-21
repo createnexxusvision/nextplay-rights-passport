@@ -122,6 +122,8 @@ main { scroll-margin-top: 64px; }
 /* Panels and forms */
 .panel { padding: 22px 24px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--card); }
 .panel h3 { margin: 0 0 6px; font-size: 1.15rem; }
+.claim { margin-bottom: 14px; max-width: 520px; }
+.claim + .note { margin: -6px 0 14px; }
 label { display: grid; gap: 6px; font-size: 0.85rem; font-weight: 700; }
 input:not([type="checkbox"]):not([type="file"]), select, textarea {
   width: 100%; min-height: 42px; padding: 9px 12px; border-radius: var(--radius-sm);

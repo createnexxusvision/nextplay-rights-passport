@@ -1,5 +1,5 @@
 {
-  "note": "names are case-insensitive. codes are case-SENSITIVE so the pronoun 'us' never reads as the United States. 'American' is excluded on purpose: 'American football' is a sport.",
+  "note": "names are case-insensitive. codes are case-SENSITIVE so the pronoun 'us' never reads as the United States. 'American' is excluded on purpose: 'American football' is a sport. Codes are skipped when the text is mostly capitals (shouting), where 'US' is usually the pronoun.",
   "names": {
     "WORLD": "\\b(?:worldwide|world-?wide|global(?:ly)?|international(?:ly)?|all\\s+countries|every\\s+country)\\b",
     "US": "\\b(?:united\\s+states|america)\\b",

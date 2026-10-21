@@ -39,6 +39,18 @@ export const Currency = z.string().trim().toUpperCase().regex(/^[A-Z]{3}$/);
 /** Integer minor units only. Money is never a float. */
 export const MinorUnits = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 
+/**
+ * What the owner actually holds in this asset (rights layering). Game footage
+ * is often owned by a school, league or broadcaster while the athlete controls
+ * only their name, image and likeness (NIL). Optional: absent = "original",
+ * so policies sealed before this field existed keep the same commitment.
+ *  original     — I created it or own the content outright
+ *  licensed     — I hold a license from the content owner
+ *  likeness_only — someone else owns the content; I control my NIL in it
+ */
+export const ClaimBasis = z.enum(["original", "licensed", "likeness_only"]);
+export type ClaimBasis = z.infer<typeof ClaimBasis>;
+
 export const RightsPolicy = z
   .object({
     version: z.number().int().positive(),
@@ -53,6 +65,7 @@ export const RightsPolicy = z
     attributionRequired: z.boolean(),
     minimumFeeMinor: MinorUnits.optional(),
     currency: Currency.optional(),
+    claimBasis: ClaimBasis.optional(),
   })
   .strict()
   .refine((p) => (p.minimumFeeMinor === undefined) === (p.currency === undefined), {

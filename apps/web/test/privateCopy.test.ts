@@ -57,3 +57,33 @@ describe("private copy (S6), multi-asset v2", () => {
     expect(restored).toMatchObject({ title: "Old clip", contentHash: a.contentHash, sealed: a.sealed, licensing: "open", revoked: false });
   });
 });
+
+describe("private copy: fails at save time, not after a refresh", () => {
+  it("refuses to save a vault that couldn't be restored", async () => {
+    const a = await assetFixture();
+    await expect(exportPrivateCopy([{ ...a, title: "x".repeat(600) }], pass)).rejects.toThrow(/Can't save yet: title/);
+    const many = Array.from({ length: 21 }, (_, i) => ({ id: `c${i}`, name: "", role: "athlete" as const, pct: "1" }));
+    await expect(exportPrivateCopy([{ ...a, contributors: many }], pass)).rejects.toThrow(/Can't save yet: contributors/);
+  });
+});
+
+describe("rights layering and staleness survive the private copy", () => {
+  it("round-trips claim basis (sealed) and the last-confirmed date", async () => {
+    const { commit: c } = await import("@nextplay/core");
+    const nil = RightsPolicy.parse({ ...policy, claimBasis: "likeness_only" });
+    const seal = await c("rights-policy", nil);
+    const a = { ...(await assetFixture()), sealed: [{ policy: nil, commitment: seal.commitment, opening: seal.opening, sealedAt: "2026-10-05T00:00:00.000Z" }], confirmedAt: "2026-10-06T00:00:00.000Z" };
+    const [back] = await importPrivateCopy(JSON.stringify(await exportPrivateCopy([a], pass)), pass);
+    expect(back!.sealed[0]!.policy.claimBasis).toBe("likeness_only");
+    expect(back!.confirmedAt).toBe("2026-10-06T00:00:00.000Z");
+  });
+  it("flags a passport not reconfirmed in STALE_DAYS", async () => {
+    const { confirmedDaysAgo, STALE_DAYS } = await import("../src/vault");
+    const a = await assetFixture();
+    const now = Date.parse("2026-10-06T00:00:00.000Z");
+    expect(confirmedDaysAgo({ ...a, confirmedAt: "2026-10-01T00:00:00.000Z" }, now)).toBe(5);
+    expect(confirmedDaysAgo({ ...a, confirmedAt: "2026-01-01T00:00:00.000Z" }, now)!).toBeGreaterThan(STALE_DAYS);
+    // Without an explicit confirmation, the latest seal counts as one.
+    expect(confirmedDaysAgo({ ...a, confirmedAt: undefined }, now)).toBe(1);
+  });
+});
