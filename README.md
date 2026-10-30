@@ -1,5 +1,16 @@
 # NextPlay Rights Passport
 
+<p align="center">
+  <img src="docs/media/hero.gif" width="720" alt="A request comes in, NVIDIA Nemotron on Nebius reads it, and the engine stamps it Allowed, Denied or Needs review">
+</p>
+
+<p align="center">
+  <img alt="NVIDIA Nemotron" src="https://img.shields.io/badge/NVIDIA-Nemotron-76B900?logo=nvidia&logoColor=white">
+  <img alt="Nebius Token Factory" src="https://img.shields.io/badge/Nebius-Token%20Factory-FDB927">
+  <img alt="Nebius x NVIDIA Global AI Hackathon: Best Apps and Agents" src="https://img.shields.io/badge/Hackathon-Best%20Apps%20%26%20Agents-0B1D3A">
+  <img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-blue">
+</p>
+
 **AI-native rights intelligence for athlete and creator content.**
 A brand or AI agent asks *"can I use this asset for this purpose?"*. An NVIDIA Nemotron model on Nebius turns the messy request into structured rights data, a deterministic policy engine returns **Allowed / Denied / Needs review**, and the athlete gets a shareable Proof Passport. Private terms are committed, never published.
 
@@ -31,6 +42,27 @@ A brand or AI agent asks *"can I use this asset for this purpose?"*. An NVIDIA N
 | Decisions come with an Ed25519-signed receipt. The passport shows "Signed" only after verifying it. | `receipts.ts`, `GET /api/v1/keys` |
 | The private copy of your terms is encrypted with your passphrase (PBKDF2 600k → AES-256-GCM). | `vault.ts` |
 | You can prove one policy field (say, "no AI training") without revealing the rest. | `merkle.ts` |
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/media/how-it-decides.jpg" alt="Slide: AI reads, code decides"><br><b>AI reads. Code decides.</b> Nemotron turns the request into a strict schema; the policy engine decides.</td>
+    <td width="50%"><img src="docs/media/seal-policy.jpg" alt="Rights Vault policy editor"><br><b>Seal the terms.</b> Countries, channels, length, minimum fee, and switches for AI training, AI generation and likeness.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/media/allowed.jpg" alt="Proof Passport showing ALLOWED with a signed receipt"><br><b>Allowed</b>, after the requester confirms the terms the AI extracted. The receipt is verified before it shows "Signed".</td>
+    <td><img src="docs/media/denied.jpg" alt="Proof Passport showing DENIED with reasons"><br><b>Denied</b>, with reasons: an AI ad using the athlete's face and voice breaks the policy.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/media/nemotron-model-id.jpg" alt="Technical details showing nvidia/nemotron-3-super-120b-a12b, 2538 ms"><br><b>Every decision records the model.</b> Here: <code>nvidia/nemotron-3-super-120b-a12b</code> on Nebius Token Factory.</td>
+    <td><img src="docs/media/under-the-hood.jpg" alt="Slide: Nemotron routing on Nebius"><br><b>Nemotron routing.</b> Lightning for routine reads, Super for judgement, Ultra only when the budget allows.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/media/royalty-routes.jpg" alt="Royalty Routes split and payout simulator"><br><b>Royalty Routes.</b> Splits must total exactly 100% before they can be sealed.</td>
+    <td></td>
+  </tr>
+</table>
 
 ## Layout
 
